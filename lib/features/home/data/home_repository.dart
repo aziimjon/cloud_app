@@ -15,8 +15,11 @@ class HomeRepository {
     try {
       final List<dynamic> allResults = [];
 
-      // Первая страница
-      var response = await _dio.get('/content/folder/');
+      // ✅ FIX: правильный endpoint для навигации по папкам
+      final String endpoint = parentId == null
+          ? '/content/folder/'
+          : '/content/folder/$parentId/';
+      var response = await _dio.get(endpoint);
       final dynamic responseData = response.data;
 
       // Определяем формат ответа: пагинированный или plain list
@@ -38,7 +41,7 @@ class HomeRepository {
           if (page == null) break;
 
           final pageResponse = await _dio.get(
-            '/content/folder/',
+            endpoint,
             queryParameters: {'page': page},
           );
           final pageData = pageResponse.data;
@@ -53,22 +56,12 @@ class HomeRepository {
         }
       }
 
-      // Client-side фильтр по parentId
-      final filtered = allResults.where((e) {
-        final itemParent = e['parent']?.toString();
-        if (parentId == null) {
-          return itemParent == null;
-        } else {
-          return itemParent == parentId;
-        }
-      }).toList();
-
-      final folders = filtered
+      final folders = allResults
           .where((e) => e['type'] == 'folder')
           .map((e) => FolderModel.fromJson(e))
           .toList();
 
-      final files = filtered
+      final files = allResults
           .where((e) => e['type'] == 'file')
           .map((e) => FileModel.fromJson(e))
           .toList();
@@ -76,7 +69,7 @@ class HomeRepository {
       return {
         'folders': folders,
         'files': files,
-        'count': filtered.length,
+        'count': allResults.length,
       };
     } on DioException catch (e) {
       throw AppException(
