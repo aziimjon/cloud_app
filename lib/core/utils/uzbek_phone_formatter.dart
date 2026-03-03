@@ -1,20 +1,13 @@
 import 'package:flutter/services.dart';
 
-/// Formatter for Uzbek phone numbers.
-/// Format: +998 XX XXX XX XX
-/// - Prefix "+998 " is non-editable
-/// - Accepts exactly 9 digits after prefix (12 total)
-/// - Auto-inserts spaces at correct positions
 class UzbekPhoneFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    // Извлекаем только цифры
+      TextEditingValue oldValue,
+      TextEditingValue newValue,
+      ) {
     final digitsOnly = newValue.text.replaceAll(RegExp(r'[^\d]'), '');
 
-    // Гарантируем что начинается с 998
     String digits;
     if (digitsOnly.startsWith('998')) {
       digits = digitsOnly;
@@ -24,12 +17,8 @@ class UzbekPhoneFormatter extends TextInputFormatter {
       digits = '998${digitsOnly.substring(3)}';
     }
 
-    // Максимум 12 цифр: 998 + 9 цифр
-    if (digits.length > 12) {
-      digits = digits.substring(0, 12);
-    }
+    if (digits.length > 12) digits = digits.substring(0, 12);
 
-    // Форматируем: +998 XX XXX XX XX
     final buffer = StringBuffer('+998');
     final afterPrefix = digits.length > 3 ? digits.substring(3) : '';
 
@@ -52,7 +41,6 @@ class UzbekPhoneFormatter extends TextInputFormatter {
 
     final formatted = buffer.toString();
 
-    // Не даём удалить префикс +998
     if (formatted.length < 5) {
       return const TextEditingValue(
         text: '+998 ',
@@ -60,26 +48,15 @@ class UzbekPhoneFormatter extends TextInputFormatter {
       );
     }
 
-    // Курсор не может быть раньше позиции 5 (после "+998 ")
-    int cursorPos = formatted.length;
-    if (newValue.selection.baseOffset >= 0) {
-      cursorPos = newValue.selection.baseOffset.clamp(5, formatted.length);
-    }
-
     return TextEditingValue(
       text: formatted,
-      selection: TextSelection.collapsed(offset: cursorPos),
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 
-  /// Извлекает чистые цифры из отформатированного номера.
-  /// "+998 90 123 45 67" → "998901234567"
-  static String extractDigits(String formatted) {
-    return formatted.replaceAll(RegExp(r'[^\d]'), '');
-  }
+  static String extractDigits(String formatted) =>
+      formatted.replaceAll(RegExp(r'[^\d]'), '');
 
-  /// Проверяет валидность номера (12 цифр: 998 + 9).
-  static bool isValid(String formatted) {
-    return extractDigits(formatted).length == 12;
-  }
+  static bool isValid(String formatted) =>
+      extractDigits(formatted).length == 12;
 }
