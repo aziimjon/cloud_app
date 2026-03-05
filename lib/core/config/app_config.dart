@@ -19,7 +19,7 @@ class AppConfig {
         instance = const AppConfig(
           environment: Environment.dev,
           // ✅ ИСПРАВЛЕНО: /server/api/v1/ — рабочий путь (не /api/v1/)
-          baseUrl: 'http://192.168.1.100/server/api/v1/',
+          baseUrl: 'http://192.168.1.100:8000/api/v1/',
           // TUS работает на отдельном порту 1080
           tusUrl: 'http://192.168.1.100:1080/files/',
         );

@@ -4,9 +4,11 @@ import '../data/download_repository.dart';
 import '../data/models/folder_model.dart';
 import '../data/models/file_model.dart';
 import '../../../core/errors/app_exception.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/storage/secure_storage.dart';
-import '../../../core/config/app_config.dart';
 import '../../upload/presentation/upload_page.dart';
+import 'photo_viewer_page.dart';
+import 'video_player_page.dart';
 
 // ✅ Задача 5: только Все, Фото, Видео
 enum _FilterType { all, images, videos }
@@ -31,6 +33,7 @@ class HomePageState extends State<HomePage> {
   bool _isGrid = true;
   String? _userName;
   String? _authToken;
+  final Map<String, String> _previewUrls = {};
 
   final Map<String, double> _downloadProgress = {};
   final Map<String, int> _downloadReceivedBytes = {};
@@ -79,6 +82,48 @@ class HomePageState extends State<HomePage> {
     if (mounted) setState(() => _authToken = token);
   }
 
+  void _loadPreviewUrls(List<FileModel> files) {
+    for (final f in files) {
+      final mime = f.mimeType.toLowerCase();
+      if (mime.startsWith('image/') &&
+          f.thumbnailPath != null &&
+          !_previewUrls.containsKey(f.id)) {
+        _previewUrls[f.id] = f.thumbnailPath!;
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openFileViewer(FileModel file) async {
+    final mime = file.mimeType.toLowerCase();
+    if (mime.startsWith('image/')) {
+      final previewUrl = _previewUrls[file.id];
+      if (previewUrl == null) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              PhotoViewerPage(imageUrl: previewUrl, fileName: file.name),
+        ),
+      );
+    } else if (mime.startsWith('video/')) {
+      final url = await _repo.getPreviewUrl(file.id);
+      if (url == null) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось открыть видео')),
+          );
+        return;
+      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VideoPlayerPage(videoUrl: url, fileName: file.name),
+        ),
+      );
+    }
+  }
+
   Future<void> _loadContent() async {
     if (!mounted) return;
     setState(() {
@@ -93,6 +138,7 @@ class HomePageState extends State<HomePage> {
         _files = result['files'] as List<FileModel>;
         _isLoading = false;
       });
+      _loadPreviewUrls(_files);
     } on AppException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1249,6 +1295,8 @@ class HomePageState extends State<HomePage> {
             (f) => _FileTile(
               file: f,
               authToken: _authToken,
+              previewUrl: _previewUrls[f.id],
+              onTap: () => _openFileViewer(f),
               onMenuTap: () => _showFileMenu(f),
               downloadProgress: _downloadProgress[f.id],
               downloadReceivedBytes: _downloadReceivedBytes[f.id],
@@ -1612,6 +1660,8 @@ class _FileTile extends StatelessWidget {
   final int? downloadReceivedBytes;
   final VoidCallback? onFavouriteTap;
   final String? authToken;
+  final String? previewUrl;
+  final VoidCallback? onTap;
 
   const _FileTile({
     required this.file,
@@ -1620,6 +1670,8 @@ class _FileTile extends StatelessWidget {
     this.downloadReceivedBytes,
     this.onFavouriteTap,
     this.authToken,
+    this.previewUrl,
+    this.onTap,
   });
 
   bool get _isDownloading => downloadProgress != null;
@@ -1638,24 +1690,17 @@ class _FileTile extends StatelessWidget {
 
   Widget _buildLeading(Color color) {
     final mime = file.mimeType.toLowerCase();
-    // Image preview via download endpoint
-    if (mime.startsWith('image/') && authToken != null) {
-      final url =
-          '${AppConfig.instance.baseUrl}content/files/${file.id}/download/';
+    // Image preview via MinIO preview URL
+    if (mime.startsWith('image/') && previewUrl != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.network(
-          url,
-          headers: {'Authorization': 'Bearer $authToken'},
+        child: CachedNetworkImage(
+          imageUrl: previewUrl!,
           width: 42,
           height: 42,
           fit: BoxFit.cover,
-          cacheWidth: 126,
-          errorBuilder: (_, __, ___) => _iconBox(color),
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return _iconBox(color);
-          },
+          placeholder: (_, __) => _iconBox(color),
+          errorWidget: (_, __, ___) => _iconBox(color),
         ),
       );
     }
@@ -1726,6 +1771,7 @@ class _FileTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
+            onTap: onTap,
             leading: _isDownloading
                 ? SizedBox(
                     width: 42,

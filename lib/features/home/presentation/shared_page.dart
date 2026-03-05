@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../data/home_repository.dart';
 import '../../../core/errors/app_exception.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/storage/secure_storage.dart';
-import '../../../core/config/app_config.dart';
+import 'photo_viewer_page.dart';
+import 'video_player_page.dart';
 
 /// Shared with me — файлы расшаренные другими пользователями
 class SharedPage extends StatefulWidget {
@@ -20,6 +22,7 @@ class _SharedPageState extends State<SharedPage> {
   bool _isLoading = true;
   String? _error;
   String? _authToken;
+  final Map<String, String> _previewUrls = {};
 
   // ✅ FIX: userId теперь String (бэкенд возвращает id как String или int)
   String? _selectedUserId;
@@ -37,6 +40,77 @@ class _SharedPageState extends State<SharedPage> {
   Future<void> _loadAuthToken() async {
     final token = await SecureStorage.getAccessToken();
     if (mounted) setState(() => _authToken = token);
+  }
+
+  void _loadPreviewUrls(List<dynamic> items) {
+    for (final item in items) {
+      if (item is! Map) continue;
+      final id = item['id']?.toString() ?? '';
+      final rawMime = item['mime_type'];
+      if (id.isEmpty || rawMime == null) continue;
+      String mimeType = '';
+      try {
+        mimeType = utf8.decode(base64.decode(rawMime.toString()));
+      } catch (_) {
+        mimeType = rawMime.toString();
+      }
+
+      final mime = mimeType.toLowerCase();
+      final thumbPath = item['thumbnail_path']?.toString();
+      if (mime.startsWith('image/') &&
+          thumbPath != null &&
+          !_previewUrls.containsKey(id)) {
+        _previewUrls[id] = thumbPath;
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _openFileViewer(Map<String, dynamic> item, String name) {
+    final id = item['id']?.toString() ?? '';
+
+    String mimeType = '';
+    final rawMime = item['mime_type'];
+    if (rawMime != null) {
+      try {
+        mimeType = utf8.decode(base64.decode(rawMime.toString()));
+      } catch (_) {
+        mimeType = rawMime.toString();
+      }
+    }
+
+    final mime = mimeType.toLowerCase();
+    if (mime.startsWith('image/')) {
+      final previewUrl = _previewUrls[id];
+      if (previewUrl == null) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PhotoViewerPage(imageUrl: previewUrl, fileName: name),
+        ),
+      );
+    } else if (mime.startsWith('video/')) {
+      _openVideoViewer(id, name);
+    }
+  }
+
+  Future<void> _openVideoViewer(String fileId, String name) async {
+    final url = await _repo.getPreviewUrl(fileId);
+    if (url == null) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть видео')),
+        );
+      return;
+    }
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VideoPlayerPage(videoUrl: url, fileName: name),
+        ),
+      );
+    }
   }
 
   Future<void> _loadSharedUsers() async {
@@ -78,6 +152,7 @@ class _SharedPageState extends State<SharedPage> {
         _items = data['results'] ?? data['files'] ?? [];
         _isLoading = false;
       });
+      _loadPreviewUrls(_items);
     } on AppException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -100,6 +175,7 @@ class _SharedPageState extends State<SharedPage> {
         _items = data['results'] ?? data['files'] ?? [];
         _isLoading = false;
       });
+      _loadPreviewUrls(_items);
     } on AppException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -337,7 +413,9 @@ class _SharedPageState extends State<SharedPage> {
     final id = item['id']?.toString() ?? '';
 
     return GestureDetector(
-      onTap: isFolder ? () => _openSharedFolder(id) : null,
+      onTap: isFolder
+          ? () => _openSharedFolder(id)
+          : () => _openFileViewer(item, name),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -393,18 +471,16 @@ class _SharedPageState extends State<SharedPage> {
       }
     }
     final mime = mimeType.toLowerCase();
-    if (mime.startsWith('image/') && _authToken != null && id.isNotEmpty) {
-      final url = '${AppConfig.instance.baseUrl}content/files/$id/download/';
+    final previewUrl = _previewUrls[id];
+    if (mime.startsWith('image/') && previewUrl != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          url,
-          headers: {'Authorization': 'Bearer $_authToken'},
+        child: CachedNetworkImage(
+          imageUrl: previewUrl,
           width: 44,
           height: 44,
           fit: BoxFit.cover,
-          cacheWidth: 132,
-          errorBuilder: (_, __, ___) => Container(
+          placeholder: (_, __) => Container(
             width: 44,
             height: 44,
             decoration: BoxDecoration(
@@ -417,22 +493,19 @@ class _SharedPageState extends State<SharedPage> {
               size: 22,
             ),
           ),
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.image_rounded,
-                color: Color(0xFF1A73E8),
-                size: 22,
-              ),
-            );
-          },
+          errorWidget: (_, __, ___) => Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.image_rounded,
+              color: Color(0xFF1A73E8),
+              size: 22,
+            ),
+          ),
         ),
       );
     }

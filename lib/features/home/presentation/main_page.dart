@@ -8,7 +8,9 @@ import '../../auth/presentation/login_page.dart';
 import '../data/home_repository.dart';
 import '../data/models/file_model.dart';
 import '../../../core/errors/app_exception.dart';
-import '../../../core/config/app_config.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'photo_viewer_page.dart';
+import 'video_player_page.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -240,6 +242,7 @@ class _RecentPageState extends State<_RecentPage> {
   bool _isLoading = true;
   String? _error;
   String? _authToken;
+  final Map<String, String> _previewUrls = {};
 
   @override
   void initState() {
@@ -251,6 +254,48 @@ class _RecentPageState extends State<_RecentPage> {
   Future<void> _loadAuthToken() async {
     final token = await SecureStorage.getAccessToken();
     if (mounted) setState(() => _authToken = token);
+  }
+
+  void _loadPreviewUrls(List<FileModel> files) {
+    for (final f in files) {
+      final mime = f.mimeType.toLowerCase();
+      if (mime.startsWith('image/') &&
+          f.thumbnailPath != null &&
+          !_previewUrls.containsKey(f.id)) {
+        _previewUrls[f.id] = f.thumbnailPath!;
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openFileViewer(FileModel file) async {
+    final mime = file.mimeType.toLowerCase();
+    if (mime.startsWith('image/')) {
+      final previewUrl = _previewUrls[file.id];
+      if (previewUrl == null) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              PhotoViewerPage(imageUrl: previewUrl, fileName: file.name),
+        ),
+      );
+    } else if (mime.startsWith('video/')) {
+      final url = await _repo.getPreviewUrl(file.id);
+      if (url == null) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось открыть видео')),
+          );
+        return;
+      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VideoPlayerPage(videoUrl: url, fileName: file.name),
+        ),
+      );
+    }
   }
 
   /// ✅ Публичный метод — вызывается из MainPage при переключении на вкладку
@@ -271,6 +316,7 @@ class _RecentPageState extends State<_RecentPage> {
             .toList();
         _isLoading = false;
       });
+      _loadPreviewUrls(_files);
     } on AppException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -295,23 +341,17 @@ class _RecentPageState extends State<_RecentPage> {
 
   Widget _buildFileLeading(FileModel file, Color color) {
     final mime = file.mimeType.toLowerCase();
-    if (mime.startsWith('image/') && _authToken != null) {
-      final url =
-          '${AppConfig.instance.baseUrl}content/files/${file.id}/download/';
+    final previewUrl = _previewUrls[file.id];
+    if (mime.startsWith('image/') && previewUrl != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.network(
-          url,
-          headers: {'Authorization': 'Bearer $_authToken'},
+        child: CachedNetworkImage(
+          imageUrl: previewUrl,
           width: 44,
           height: 44,
           fit: BoxFit.cover,
-          cacheWidth: 132,
-          errorBuilder: (_, __, ___) => _iconBox(file, color),
-          loadingBuilder: (_, child, progress) {
-            if (progress == null) return child;
-            return _iconBox(file, color);
-          },
+          placeholder: (_, __) => _iconBox(file, color),
+          errorWidget: (_, __, ___) => _iconBox(file, color),
         ),
       );
     }
@@ -450,6 +490,7 @@ class _RecentPageState extends State<_RecentPage> {
                       ],
                     ),
                     child: ListTile(
+                      onTap: () => _openFileViewer(file),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 8,
