@@ -5,13 +5,13 @@ import '../../../core/storage/secure_storage.dart';
 import '../../../core/errors/app_exception.dart';
 import '../data/upload_repository.dart';
 
-enum _FileStatus { waiting, uploading, done, error, cancelled }
+enum _FileStatus { waiting, uploading, paused, done, error, cancelled }
 
 class _FileItem {
   final XFile file;
   final String name;
   _FileStatus status;
-  double progress; // 0.0–1.0
+  double progress;
   String? error;
   bool cancelRequested;
 
@@ -41,11 +41,11 @@ class _UploadPageState extends State<UploadPage> {
   bool _isUploading = false;
   bool _allDone = false;
   static const int _maxFiles = 50;
+  int _currentIndex = 0;
 
   Future<void> _pickFiles() async {
     if (_isUploading) return;
 
-    // ✅ Только фото и видео через image_and_video тип
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: FileType.custom,
@@ -61,13 +61,10 @@ class _UploadPageState extends State<UploadPage> {
       for (final f in result.files) {
         if (f.path == null) continue;
         if (_queue.length >= _maxFiles) break;
-
-        // Дополнительная проверка mime
         if (!UploadRepository.isAllowed(f.name)) {
           rejected.add(f.name);
           continue;
         }
-
         final alreadyAdded = _queue.any((q) => q.name == f.name);
         if (!alreadyAdded) {
           _queue.add(_FileItem(file: XFile(f.path!), name: f.name));
@@ -75,7 +72,6 @@ class _UploadPageState extends State<UploadPage> {
       }
     });
 
-    // Показать предупреждение если были отклонённые файлы
     if (rejected.isNotEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -96,6 +92,9 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   Future<void> _startUploadAll() async {
+    // Capture folder ID at batch start — in-progress uploads keep their target
+    final targetFolderId = widget.parentId;
+
     final userId = await SecureStorage.getUserId();
     if (userId == null) {
       if (mounted) {
@@ -109,60 +108,82 @@ class _UploadPageState extends State<UploadPage> {
       return;
     }
 
-    setState(() => _isUploading = true);
+    setState(() {
+      _isUploading = true;
+      _currentIndex = 0;
+    });
 
-    for (final item in _queue) {
+    // ✅ СТРОГО ПОСЛЕДОВАТЕЛЬНО: await на каждом файле
+    // следующий файл начнётся ТОЛЬКО после полного завершения предыдущего
+    for (int i = 0; i < _queue.length; i++) {
+      final item = _queue[i];
       if (item.status != _FileStatus.waiting) continue;
       if (item.cancelRequested) {
         setState(() => item.status = _FileStatus.cancelled);
         continue;
       }
 
-      setState(() {
-        item.status = _FileStatus.uploading;
-        item.progress = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _currentIndex = i;
+          item.status = _FileStatus.uploading;
+          item.progress = 0;
+        });
+      }
 
       try {
+        // ✅ await здесь — цикл стоит пока этот файл не закончится
+        // включая все паузы/resume при потере сети
         await _repo.uploadFile(
           file: item.file,
-          parentId: widget.parentId,
+          parentId: targetFolderId,
           userId: userId,
           onProgress: (progress) {
             if (!mounted) return;
-            // ✅ Проверяем отмену во время загрузки
             if (item.cancelRequested) return;
             setState(() => item.progress = progress);
           },
           onComplete: () {
             if (!mounted) return;
-            if (item.cancelRequested) {
-              setState(() => item.status = _FileStatus.cancelled);
-            } else {
-              setState(() {
-                item.status = _FileStatus.done;
-                item.progress = 1.0;
-              });
-            }
+            setState(() {
+              item.status = item.cancelRequested
+                  ? _FileStatus.cancelled
+                  : _FileStatus.done;
+              item.progress = 1.0;
+            });
+          },
+          onStatusChange: (status) {
+            if (!mounted) return;
+            setState(() {
+              if (status == 'paused') {
+                item.status = _FileStatus.paused;
+              } else if (status == 'uploading' || status == 'resumed') {
+                item.status = _FileStatus.uploading;
+              }
+            });
           },
         );
-      } on AppException catch (e) {
+      } catch (e) {
         if (mounted) {
           setState(() {
-            item.status =
-            item.cancelRequested ? _FileStatus.cancelled : _FileStatus.error;
-            item.error = e.message;
+            item.status = item.cancelRequested
+                ? _FileStatus.cancelled
+                : _FileStatus.error;
+            item.error = e is AppException ? e.message : e.toString();
           });
         }
       }
+      // ✅ Только здесь переходим к следующему файлу
     }
 
     if (mounted) {
       final hasSuccess = _queue.any((f) => f.status == _FileStatus.done);
-      final allSettled = _queue.every((f) =>
-      f.status == _FileStatus.done ||
-          f.status == _FileStatus.error ||
-          f.status == _FileStatus.cancelled);
+      final allSettled = _queue.every(
+        (f) =>
+            f.status == _FileStatus.done ||
+            f.status == _FileStatus.error ||
+            f.status == _FileStatus.cancelled,
+      );
 
       setState(() {
         _isUploading = false;
@@ -175,7 +196,6 @@ class _UploadPageState extends State<UploadPage> {
     }
   }
 
-  // ✅ Задача 3: Отмена конкретного файла
   void _cancelFile(_FileItem item) {
     setState(() {
       item.cancelRequested = true;
@@ -186,26 +206,30 @@ class _UploadPageState extends State<UploadPage> {
   }
 
   void _removeFile(_FileItem item) {
-    if (item.status == _FileStatus.uploading) return;
+    if (item.status == _FileStatus.uploading ||
+        item.status == _FileStatus.paused)
+      return;
     setState(() => _queue.remove(item));
   }
 
   void _clearDone() {
     setState(() {
-      _queue.removeWhere((f) =>
-      f.status == _FileStatus.done ||
-          f.status == _FileStatus.cancelled ||
-          f.status == _FileStatus.error);
+      _queue.removeWhere(
+        (f) =>
+            f.status == _FileStatus.done ||
+            f.status == _FileStatus.cancelled ||
+            f.status == _FileStatus.error,
+      );
       _allDone = false;
     });
   }
 
-  int get _waitingCount =>
-      _queue.where((f) => f.status == _FileStatus.waiting).length;
   int get _doneCount =>
       _queue.where((f) => f.status == _FileStatus.done).length;
   int get _uploadingCount =>
       _queue.where((f) => f.status == _FileStatus.uploading).length;
+  int get _pausedCount =>
+      _queue.where((f) => f.status == _FileStatus.paused).length;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +237,6 @@ class _UploadPageState extends State<UploadPage> {
       backgroundColor: const Color(0xFFF5F7FA),
       body: CustomScrollView(
         slivers: [
-          // ── AppBar ──────────────────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 110,
             floating: false,
@@ -236,8 +259,10 @@ class _UploadPageState extends State<UploadPage> {
               if (_queue.isNotEmpty && !_isUploading)
                 TextButton(
                   onPressed: _clearDone,
-                  child: const Text('Очистить',
-                      style: TextStyle(color: Colors.red)),
+                  child: const Text(
+                    'Очистить',
+                    style: TextStyle(color: Colors.red),
+                  ),
                 ),
             ],
           ),
@@ -248,7 +273,6 @@ class _UploadPageState extends State<UploadPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Зона выбора ──────────────────────────────────────
                   GestureDetector(
                     onTap: _isUploading ? null : _pickFiles,
                     child: Container(
@@ -258,7 +282,9 @@ class _UploadPageState extends State<UploadPage> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: _isUploading
+                          color: _pausedCount > 0
+                              ? Colors.orange
+                              : _isUploading
                               ? Colors.blue
                               : Colors.blue.withValues(alpha: 0.35),
                           width: 2,
@@ -278,14 +304,22 @@ class _UploadPageState extends State<UploadPage> {
                             width: 52,
                             height: 52,
                             decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.1),
+                              color: _pausedCount > 0
+                                  ? Colors.orange.withValues(alpha: 0.1)
+                                  : Colors.blue.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Icon(
                               _allDone
                                   ? Icons.check_circle_rounded
+                                  : _pausedCount > 0
+                                  ? Icons.wifi_off_rounded
                                   : Icons.cloud_upload_rounded,
-                              color: _allDone ? Colors.green : Colors.blue,
+                              color: _allDone
+                                  ? Colors.green
+                                  : _pausedCount > 0
+                                  ? Colors.orange
+                                  : Colors.blue,
                               size: 26,
                             ),
                           ),
@@ -293,14 +327,19 @@ class _UploadPageState extends State<UploadPage> {
                           Text(
                             _allDone
                                 ? 'Всё загружено!'
+                                : _pausedCount > 0
+                                ? 'Нет сети — ожидание...'
                                 : _isUploading
-                                ? 'Идёт загрузка...'
+                                ? 'Загрузка ${_currentIndex + 1} из ${_queue.length}...'
                                 : 'Нажмите чтобы выбрать',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color:
-                              _allDone ? Colors.green : Colors.black87,
+                              color: _allDone
+                                  ? Colors.green
+                                  : _pausedCount > 0
+                                  ? Colors.orange
+                                  : Colors.black87,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -318,7 +357,6 @@ class _UploadPageState extends State<UploadPage> {
 
                   const SizedBox(height: 16),
 
-                  // ── Счётчик ──────────────────────────────────────────
                   if (_queue.isNotEmpty) ...[
                     Row(
                       children: [
@@ -333,24 +371,39 @@ class _UploadPageState extends State<UploadPage> {
                         const SizedBox(width: 8),
                         if (_uploadingCount > 0)
                           _StatusBadge(
-                              '$_uploadingCount загружается',
-                              Colors.blue),
+                            '$_uploadingCount загружается',
+                            Colors.blue,
+                          ),
+                        if (_pausedCount > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: _StatusBadge(
+                              '$_pausedCount на паузе',
+                              Colors.orange,
+                            ),
+                          ),
                         if (_doneCount > 0)
                           Padding(
                             padding: const EdgeInsets.only(left: 6),
                             child: _StatusBadge(
-                                '$_doneCount готово', Colors.green),
+                              '$_doneCount готово',
+                              Colors.green,
+                            ),
                           ),
                         const Spacer(),
                         if (!_isUploading && _queue.length < _maxFiles)
                           TextButton.icon(
                             onPressed: _pickFiles,
                             icon: const Icon(Icons.add, size: 15),
-                            label: const Text('Добавить',
-                                style: TextStyle(fontSize: 13)),
+                            label: const Text(
+                              'Добавить',
+                              style: TextStyle(fontSize: 13),
+                            ),
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                             ),
                           ),
                       ],
@@ -358,70 +411,80 @@ class _UploadPageState extends State<UploadPage> {
                     const SizedBox(height: 10),
                   ],
 
-                  // ── Список файлов ─────────────────────────────────────
-                  ..._queue.map((item) => _FileItemTile(
-                    item: item,
-                    onCancel: item.status == _FileStatus.uploading ||
-                        item.status == _FileStatus.waiting
-                        ? () => _cancelFile(item)
-                        : null,
-                    onRemove: item.status != _FileStatus.uploading
-                        ? () => _removeFile(item)
-                        : null,
-                  )),
+                  ..._queue.map(
+                    (item) => _FileItemTile(
+                      item: item,
+                      onCancel:
+                          (item.status == _FileStatus.uploading ||
+                              item.status == _FileStatus.waiting ||
+                              item.status == _FileStatus.paused)
+                          ? () => _cancelFile(item)
+                          : null,
+                      onRemove:
+                          (item.status != _FileStatus.uploading &&
+                              item.status != _FileStatus.paused)
+                          ? () => _removeFile(item)
+                          : null,
+                    ),
+                  ),
 
                   const SizedBox(height: 16),
 
-                  // ── Главная кнопка ────────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     child: _isUploading
                         ? OutlinedButton.icon(
-                      onPressed: null,
-                      icon: const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      label: const Text('Загрузка...',
-                          style: TextStyle(fontSize: 16)),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    )
+                            onPressed: null,
+                            icon: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: _pausedCount > 0
+                                    ? Colors.orange
+                                    : Colors.blue,
+                              ),
+                            ),
+                            label: Text(
+                              _pausedCount > 0
+                                  ? 'Ожидание сети...'
+                                  : 'Загрузка...',
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          )
                         : ElevatedButton.icon(
-                      onPressed: _pickFiles,
-                      icon: const Icon(Icons.add_photo_alternate_rounded,
-                          color: Colors.white),
-                      label: Text(
-                        _queue.isEmpty
-                            ? 'Выбрать фото / видео'
-                            : _allDone
-                            ? 'Загрузить ещё'
-                            : 'Добавить ещё',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        elevation: 0,
-                      ),
-                    ),
+                            onPressed: _pickFiles,
+                            icon: const Icon(
+                              Icons.add_photo_alternate_rounded,
+                              color: Colors.white,
+                            ),
+                            label: Text(
+                              _queue.isEmpty
+                                  ? 'Выбрать фото / видео'
+                                  : _allDone
+                                  ? 'Загрузить ещё'
+                                  : 'Добавить ещё',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              elevation: 0,
+                            ),
+                          ),
                   ),
 
                   const SizedBox(height: 40),
@@ -435,7 +498,6 @@ class _UploadPageState extends State<UploadPage> {
   }
 }
 
-// ── Status Badge ──────────────────────────────────────────────────────────────
 class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
@@ -452,23 +514,21 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-            fontSize: 11, color: color, fontWeight: FontWeight.w600),
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
 }
 
-// ── Один файл в очереди ───────────────────────────────────────────────────────
 class _FileItemTile extends StatelessWidget {
   final _FileItem item;
-  final VoidCallback? onCancel;  // во время загрузки — красный X
-  final VoidCallback? onRemove;  // после — убрать из списка
+  final VoidCallback? onCancel;
+  final VoidCallback? onRemove;
 
-  const _FileItemTile({
-    required this.item,
-    this.onCancel,
-    this.onRemove,
-  });
+  const _FileItemTile({required this.item, this.onCancel, this.onRemove});
 
   @override
   Widget build(BuildContext context) {
@@ -491,10 +551,8 @@ class _FileItemTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Иконка
               _buildIcon(),
               const SizedBox(width: 10),
-              // Имя файла
               Expanded(
                 child: Text(
                   item.name,
@@ -507,7 +565,6 @@ class _FileItemTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // ✅ Задача 3: Красный X при загрузке / серый X после
               if (onCancel != null)
                 GestureDetector(
                   onTap: onCancel,
@@ -518,8 +575,11 @@ class _FileItemTile extends StatelessWidget {
                       color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.close_rounded,
-                        size: 16, color: Colors.red),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: Colors.red,
+                    ),
                   ),
                 )
               else if (onRemove != null)
@@ -532,15 +592,18 @@ class _FileItemTile extends StatelessWidget {
                       color: Colors.grey.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.close_rounded,
-                        size: 16, color: Colors.grey),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                   ),
                 ),
             ],
           ),
 
-          // ── Прогресс бар ───────────────────────────────────────────
-          if (item.status == _FileStatus.uploading) ...[
+          if (item.status == _FileStatus.uploading ||
+              item.status == _FileStatus.paused) ...[
             const SizedBox(height: 8),
             Row(
               children: [
@@ -548,42 +611,65 @@ class _FileItemTile extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: item.progress, // уже 0.0–1.0
+                      value: item.progress,
                       minHeight: 4,
                       backgroundColor: Colors.grey[200],
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                          Colors.blue),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        item.status == _FileStatus.paused
+                            ? Colors.orange
+                            : Colors.blue,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Text(
                   '${(item.progress * 100).toInt()}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Colors.blue,
+                    color: item.status == _FileStatus.paused
+                        ? Colors.orange
+                        : Colors.blue,
                   ),
                 ),
               ],
             ),
           ],
 
-          // ── Статус текст ────────────────────────────────────────────
+          if (item.status == _FileStatus.paused) ...[
+            const SizedBox(height: 4),
+            const Row(
+              children: [
+                Icon(Icons.wifi_off_rounded, size: 12, color: Colors.orange),
+                SizedBox(width: 4),
+                Text(
+                  'Нет сети — возобновится автоматически',
+                  style: TextStyle(fontSize: 11, color: Colors.orange),
+                ),
+              ],
+            ),
+          ],
           if (item.status == _FileStatus.done) ...[
             const SizedBox(height: 4),
-            const Text('Загружено',
-                style: TextStyle(fontSize: 11, color: Colors.green)),
+            const Text(
+              'Загружено',
+              style: TextStyle(fontSize: 11, color: Colors.green),
+            ),
           ],
           if (item.status == _FileStatus.cancelled) ...[
             const SizedBox(height: 4),
-            Text('Отменено',
-                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+            Text(
+              'Отменено',
+              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            ),
           ],
           if (item.status == _FileStatus.error && item.error != null) ...[
             const SizedBox(height: 4),
-            Text(item.error!,
-                style: const TextStyle(fontSize: 11, color: Colors.red)),
+            Text(
+              item.error!,
+              style: const TextStyle(fontSize: 11, color: Colors.red),
+            ),
           ],
         ],
       ),
@@ -596,6 +682,8 @@ class _FileItemTile extends StatelessWidget {
         return _iconBox(Icons.schedule_rounded, Colors.grey);
       case _FileStatus.uploading:
         return _iconBox(Icons.cloud_upload_rounded, Colors.blue);
+      case _FileStatus.paused:
+        return _iconBox(Icons.wifi_off_rounded, Colors.orange);
       case _FileStatus.done:
         return _iconBox(Icons.check_circle_rounded, Colors.green);
       case _FileStatus.error:

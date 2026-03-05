@@ -8,6 +8,7 @@ import '../../auth/presentation/login_page.dart';
 import '../data/home_repository.dart';
 import '../data/models/file_model.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/config/app_config.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -23,7 +24,9 @@ class _MainPageState extends State<MainPage> {
   String? _currentFolderId;
 
   void _onFolderChanged(String? folderId) {
-    _currentFolderId = folderId;
+    setState(() {
+      _currentFolderId = folderId;
+    });
   }
 
   final _homeKey = GlobalKey<HomePageState>();
@@ -61,9 +64,9 @@ class _MainPageState extends State<MainPage> {
   Future<void> _logout() async {
     await SecureStorage.clearTokens();
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
     }
   }
 
@@ -161,8 +164,7 @@ class _NavItem extends StatelessWidget {
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: active
                     ? const Color(0xFF1A73E8).withValues(alpha: 0.12)
@@ -181,8 +183,7 @@ class _NavItem extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 color: active ? const Color(0xFF1A73E8) : Colors.grey[400],
-                fontWeight:
-                active ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ],
@@ -238,11 +239,18 @@ class _RecentPageState extends State<_RecentPage> {
   List<FileModel> _files = [];
   bool _isLoading = true;
   String? _error;
+  String? _authToken;
 
   @override
   void initState() {
     super.initState();
     _loadRecentFiles();
+    _loadAuthToken();
+  }
+
+  Future<void> _loadAuthToken() async {
+    final token = await SecureStorage.getAccessToken();
+    if (mounted) setState(() => _authToken = token);
   }
 
   /// ✅ Публичный метод — вызывается из MainPage при переключении на вкладку
@@ -285,6 +293,73 @@ class _RecentPageState extends State<_RecentPage> {
     return const Color(0xFF1A73E8); // синий
   }
 
+  Widget _buildFileLeading(FileModel file, Color color) {
+    final mime = file.mimeType.toLowerCase();
+    if (mime.startsWith('image/') && _authToken != null) {
+      final url =
+          '${AppConfig.instance.baseUrl}content/files/${file.id}/download/';
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          url,
+          headers: {'Authorization': 'Bearer $_authToken'},
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          cacheWidth: 132,
+          errorBuilder: (_, __, ___) => _iconBox(file, color),
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            return _iconBox(file, color);
+          },
+        ),
+      );
+    }
+    if (mime.startsWith('video/')) {
+      return Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(Icons.videocam_rounded, color: color, size: 22),
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return _iconBox(file, color);
+  }
+
+  Widget _iconBox(FileModel file, Color color) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(_icon(file.mimeType), color: color, size: 22),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -294,10 +369,7 @@ class _RecentPageState extends State<_RecentPage> {
         elevation: 0,
         title: const Text(
           'Recent',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -310,148 +382,135 @@ class _RecentPageState extends State<_RecentPage> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline,
-                size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 12),
-            Text(_error!,
-                style: TextStyle(color: Colors.grey[600])),
-            const SizedBox(height: 16),
-            TextButton.icon(
-              onPressed: _loadRecentFiles,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      )
-          : _files.isEmpty
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A73E8)
-                    .withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.access_time_rounded,
-                size: 40,
-                color: Color(0xFF1A73E8),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'No recent files',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Files you open will appear here',
-              style: TextStyle(color: Colors.grey[500]),
-            ),
-          ],
-        ),
-      )
-          : RefreshIndicator(
-        onRefresh: _loadRecentFiles,
-        child: ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: _files.length,
-          separatorBuilder: (_, __) =>
-          const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final file = _files[index];
-            final color = _color(file.mimeType);
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
+                  const SizedBox(height: 12),
+                  Text(_error!, style: TextStyle(color: Colors.grey[600])),
+                  const SizedBox(height: 16),
+                  TextButton.icon(
+                    onPressed: _loadRecentFiles,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
                   ),
                 ],
               ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 8),
-                // ✅ FIX: иконка с цветом по типу файла
-                leading: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    _icon(file.mimeType),
-                    color: color,
-                    size: 22,
-                  ),
-                ),
-                title: Text(
-                  file.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Row(
-                  children: [
-                    // ✅ FIX: метка типа файла
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        file.mimeType.startsWith('image/')
-                            ? 'Фото'
-                            : file.mimeType.startsWith('video/')
-                            ? 'Видео'
-                            : 'Файл',
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+            )
+          : _files.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      file.formattedSize,
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: 12,
-                      ),
+                    child: const Icon(
+                      Icons.access_time_rounded,
+                      size: 40,
+                      color: Color(0xFF1A73E8),
                     ),
-                  ],
-                ),
-                trailing: file.isFavourite
-                    ? const Icon(Icons.favorite,
-                    color: Colors.red, size: 18)
-                    : null,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No recent files',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Files you open will appear here',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
-      ),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadRecentFiles,
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: _files.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final file = _files[index];
+                  final color = _color(file.mimeType);
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      leading: _buildFileLeading(file, color),
+                      title: Text(
+                        file.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Row(
+                        children: [
+                          // ✅ FIX: метка типа файла
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              file.mimeType.startsWith('image/')
+                                  ? 'Фото'
+                                  : file.mimeType.startsWith('video/')
+                                  ? 'Видео'
+                                  : 'Файл',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            file.formattedSize,
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: file.isFavourite
+                          ? const Icon(
+                              Icons.favorite,
+                              color: Colors.red,
+                              size: 18,
+                            )
+                          : null,
+                    ),
+                  );
+                },
+              ),
+            ),
     );
   }
 }
@@ -504,10 +563,7 @@ class _ProfilePage extends StatelessWidget {
                         SizedBox(height: 4),
                         Text(
                           'My Cloud User',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
                         ),
                       ],
                     ),

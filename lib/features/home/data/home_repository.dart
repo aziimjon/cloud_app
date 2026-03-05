@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import '../../../core/network/dio_client.dart';
-import '../../../core/storage/secure_storage.dart';
 import '../../../core/errors/app_exception.dart';
 import 'models/folder_model.dart';
 import 'models/file_model.dart';
@@ -8,44 +7,27 @@ import 'models/file_model.dart';
 class HomeRepository {
   final Dio _dio = DioClient.instance;
 
-  // ── Получить ВСЕ страницы содержимого папки ───────────────────────────────
-  // ✅ FIX: бэкенд отдаёт пагинацию (count:25, next:...?page=2)
-  // Грузим все страницы, потом делаем client-side фильтр по parentId
   Future<Map<String, dynamic>> getContent({String? parentId}) async {
     try {
       final List<dynamic> allResults = [];
 
-      // ✅ FIX: правильный endpoint для навигации по папкам
       final String endpoint = parentId == null
           ? '/content/folder/'
           : '/content/folder/$parentId/';
       var response = await _dio.get(endpoint);
       final dynamic responseData = response.data;
 
-      // Определяем формат ответа: пагинированный или plain list
       if (responseData is List) {
-        // Plain list — берём всё сразу
         allResults.addAll(responseData);
       } else {
-        // Пагинированный: {count, next, results}
         allResults.addAll(responseData['results'] ?? []);
-
-        // ✅ Грузим все оставшиеся страницы пока есть next
         String? nextUrl = responseData['next']?.toString();
         while (nextUrl != null && nextUrl.isNotEmpty) {
-          // ✅ ВАЖНО: next URL содержит полный путь вида
-          // http://192.168.1.100/api/v1/content/folder/?page=2
-          // но baseUrl у нас /server/api/v1/ — извлекаем только ?page=N
           final uri = Uri.parse(nextUrl);
           final page = uri.queryParameters['page'];
           if (page == null) break;
-
-          final pageResponse = await _dio.get(
-            endpoint,
-            queryParameters: {'page': page},
-          );
+          final pageResponse = await _dio.get(endpoint, queryParameters: {'page': page});
           final pageData = pageResponse.data;
-
           if (pageData is List) {
             allResults.addAll(pageData);
             break;
@@ -66,11 +48,7 @@ class HomeRepository {
           .map((e) => FileModel.fromJson(e))
           .toList();
 
-      return {
-        'folders': folders,
-        'files': files,
-        'count': allResults.length,
-      };
+      return {'folders': folders, 'files': files, 'count': allResults.length};
     } on DioException catch (e) {
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось загрузить файлы',
@@ -79,19 +57,12 @@ class HomeRepository {
     }
   }
 
-  // ── Создать папку ──────────────────────────────────────────────────────────
-  Future<FolderModel> createFolder({
-    required String name,
-    String? parentId,
-  }) async {
+  Future<FolderModel> createFolder({required String name, String? parentId}) async {
     try {
-      final response = await _dio.post(
-        '/content/folder/',
-        data: {
-          'name': name,
-          if (parentId != null) 'parent': parentId,
-        },
-      );
+      final response = await _dio.post('/content/folder/', data: {
+        'name': name,
+        if (parentId != null) 'parent': parentId,
+      });
       final data = response.data['result'] ?? response.data;
       return FolderModel.fromJson(data);
     } on DioException catch (e) {
@@ -102,17 +73,9 @@ class HomeRepository {
     }
   }
 
-  // ── Переименовать файл или папку ──────────────────────────────────────────
-  Future<void> renameItem({
-    required String type,
-    required String id,
-    required String name,
-  }) async {
+  Future<void> renameItem({required String type, required String id, required String name}) async {
     try {
-      await _dio.patch(
-        '/content/folder-file/rename/',
-        data: {'type': type, 'id': id, 'name': name},
-      );
+      await _dio.patch('/content/folder-file/rename/', data: {'type': type, 'id': id, 'name': name});
     } on DioException catch (e) {
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось переименовать',
@@ -121,19 +84,12 @@ class HomeRepository {
     }
   }
 
-  // ── Удалить файл или папку ────────────────────────────────────────────────
-  Future<void> deleteItem({
-    required String type,
-    required String id,
-  }) async {
+  Future<void> deleteItem({required String type, required String id}) async {
     try {
-      await _dio.delete(
-        '/content/folder-file/delete/',
-        data: {
-          'files': type == 'file' ? [id] : [],
-          'folders': type == 'folder' ? [id] : [],
-        },
-      );
+      await _dio.delete('/content/folder-file/delete/', data: {
+        'files': type == 'file' ? [id] : [],
+        'folders': type == 'folder' ? [id] : [],
+      });
     } on DioException catch (e) {
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось удалить',
@@ -142,7 +98,6 @@ class HomeRepository {
     }
   }
 
-  // ── Избранное: получить список ────────────────────────────────────────────
   Future<List<dynamic>> getFavouriteFiles() async {
     try {
       final response = await _dio.get('/content/favourite-file/');
@@ -155,13 +110,9 @@ class HomeRepository {
     }
   }
 
-  // ── Избранное: добавить ───────────────────────────────────────────────────
   Future<int> addToFavourites(String fileId) async {
     try {
-      final response = await _dio.post(
-        '/content/favourite-file/',
-        data: {'file': fileId},
-      );
+      final response = await _dio.post('/content/favourite-file/', data: {'file': fileId});
       return response.data['id'] as int;
     } on DioException catch (e) {
       throw AppException(
@@ -171,10 +122,9 @@ class HomeRepository {
     }
   }
 
-  // ── Избранное: убрать ─────────────────────────────────────────────────────
-  Future<void> removeFromFavourites(String fileId) async {
+  Future<void> removeFromFavourites(String favId) async {
     try {
-      await _dio.delete('/content/favourite-file/$fileId/');
+      await _dio.delete('/content/favourite-file/$favId/');
     } on DioException catch (e) {
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось убрать из избранного',
@@ -183,13 +133,10 @@ class HomeRepository {
     }
   }
 
-  // ── Недавние файлы ────────────────────────────────────────────────────────
   Future<List<dynamic>> getRecentFiles() async {
     try {
       final response = await _dio.get('/content/recent-files/');
-      if (response.data is List) {
-        return response.data as List;
-      }
+      if (response.data is List) return response.data as List;
       return response.data['results'] ?? [];
     } on DioException catch (e) {
       throw AppException(
@@ -199,12 +146,23 @@ class HomeRepository {
     }
   }
 
-  // ── Shared: получить список пользователей ─────────────────────────────────
-  // ✅ FIX: id может прийти как String или int — обрабатываем оба варианта
+  // ✅ FIX: id может быть String или int — всегда toString()
   Future<List<dynamic>> getSharedWithMe() async {
     try {
       final response = await _dio.get('/content/shared-with-me/');
-      return response.data['results'] ?? response.data ?? [];
+      final raw = response.data['results'] ?? response.data ?? [];
+      if (raw is! List) return [];
+      // Нормализуем id в String чтобы не было type cast errors
+      return (raw as List).map((item) {
+        if (item is Map) {
+          final normalized = Map<String, dynamic>.from(item);
+          if (normalized['id'] != null) {
+            normalized['id'] = normalized['id'].toString();
+          }
+          return normalized;
+        }
+        return item;
+      }).toList();
     } on DioException catch (e) {
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось загрузить Shared',
@@ -213,8 +171,6 @@ class HomeRepository {
     }
   }
 
-  // ── Shared: файлы конкретного пользователя ───────────────────────────────
-  // ✅ FIX: userId теперь String (не int) — бэкенд может вернуть любой тип
   Future<Map<String, dynamic>> getSharedFromUser(String userId) async {
     try {
       final response = await _dio.get('/content/shared-with-me/$userId/');
@@ -227,13 +183,9 @@ class HomeRepository {
     }
   }
 
-  // ── Shared: папка конкретного пользователя ───────────────────────────────
-  // ✅ FIX: userId теперь String
-  Future<Map<String, dynamic>> getSharedFolder(
-      String userId, String folderId) async {
+  Future<Map<String, dynamic>> getSharedFolder(String userId, String folderId) async {
     try {
-      final response = await _dio
-          .get('/content/shared-with-me/$userId/folder/$folderId/');
+      final response = await _dio.get('/content/shared-with-me/$userId/folder/$folderId/');
       return response.data;
     } on DioException catch (e) {
       throw AppException(

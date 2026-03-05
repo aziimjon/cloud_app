@@ -5,6 +5,7 @@ import '../data/models/folder_model.dart';
 import '../data/models/file_model.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/storage/secure_storage.dart';
+import '../../../core/config/app_config.dart';
 import '../../upload/presentation/upload_page.dart';
 
 // ✅ Задача 5: только Все, Фото, Видео
@@ -29,6 +30,7 @@ class HomePageState extends State<HomePage> {
   String? _error;
   bool _isGrid = true;
   String? _userName;
+  String? _authToken;
 
   final Map<String, double> _downloadProgress = {};
   final Map<String, int> _downloadReceivedBytes = {};
@@ -50,8 +52,7 @@ class HomePageState extends State<HomePage> {
     return source.where((f) => _matchesFilter(f, _activeFilter)).toList();
   }
 
-  List<FolderModel> get _displayFolders =>
-      _showFavourites ? [] : _folders;
+  List<FolderModel> get _displayFolders => _showFavourites ? [] : _folders;
 
   bool _matchesFilter(FileModel f, _FilterType filter) {
     final m = f.mimeType.toLowerCase();
@@ -70,9 +71,14 @@ class HomePageState extends State<HomePage> {
     super.initState();
     _loadUserName();
     _loadContent();
+    _loadAuthToken();
   }
 
-  // ✅ Задача 1 & 2: _loadContent всегда передаёт currentFolderId
+  Future<void> _loadAuthToken() async {
+    final token = await SecureStorage.getAccessToken();
+    if (mounted) setState(() => _authToken = token);
+  }
+
   Future<void> _loadContent() async {
     if (!mounted) return;
     setState(() {
@@ -104,20 +110,25 @@ class HomePageState extends State<HomePage> {
 
   void reloadContent() => _loadContent();
 
+  // ✅ ФИК #1: сохраняем folderId ДО push + reload после возврата
   void _openUploadPage() {
-    // ✅ Задача 2: передаём текущую папку при открытии upload
+    final currentFolder = _currentFolderId;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => UploadPage(
-          parentId: _currentFolderId,
-          onUploadComplete: () {
-            // После загрузки обновляем содержимое текущей папки
+          parentId: currentFolder,
+          onUploadComplete: () async {
+            // Ждём пока бэкенд обработает TUS webhook
+            await Future.delayed(const Duration(seconds: 2));
             _loadContent();
           },
         ),
       ),
-    );
+    ).then((_) {
+      // Также обновляем при возврате с Upload страницы
+      _loadContent();
+    });
   }
 
   void _openFolder(FolderModel folder) {
@@ -143,8 +154,6 @@ class HomePageState extends State<HomePage> {
     _loadContent();
   }
 
-  // ✅ Задача 4: убран фильтр рядом со звёздочкой в AppBar
-  // ✅ Задача 5: только Все, Фото, Видео в фильтре
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
@@ -176,7 +185,6 @@ class HomePageState extends State<HomePage> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              // ✅ Только 3 чипа: Все, Фото, Видео
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -225,13 +233,11 @@ class HomePageState extends State<HomePage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Padding(
-        padding:
-        EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius:
-            BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -247,13 +253,17 @@ class HomePageState extends State<HomePage> {
                       color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.create_new_folder,
-                        color: Colors.blue, size: 20),
+                    child: const Icon(
+                      Icons.create_new_folder,
+                      color: Colors.blue,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  const Text('Новая папка',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Новая папка',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -271,10 +281,11 @@ class HomePageState extends State<HomePage> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
-                        color: Colors.blue, width: 1.5),
+                      color: Colors.blue,
+                      width: 1.5,
+                    ),
                   ),
-                  prefixIcon:
-                  const Icon(Icons.folder, color: Colors.amber),
+                  prefixIcon: const Icon(Icons.folder, color: Colors.amber),
                 ),
               ),
               const SizedBox(height: 16),
@@ -284,10 +295,10 @@ class HomePageState extends State<HomePage> {
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(ctx),
                       style: OutlinedButton.styleFrom(
-                        padding:
-                        const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: const Text('Отмена'),
                     ),
@@ -304,8 +315,6 @@ class HomePageState extends State<HomePage> {
                             name: name,
                             parentId: _currentFolderId,
                           );
-                          // ✅ Задача 1: после создания папки обновляем список
-                          // и входим в неё
                           _openFolder(newFolder);
                         } on AppException catch (e) {
                           if (mounted) {
@@ -320,13 +329,15 @@ class HomePageState extends State<HomePage> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
-                        padding:
-                        const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Text('Создать',
-                          style: TextStyle(color: Colors.white)),
+                      child: const Text(
+                        'Создать',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
                 ],
@@ -346,8 +357,7 @@ class HomePageState extends State<HomePage> {
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius:
-          BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: SafeArea(
@@ -365,17 +375,24 @@ class HomePageState extends State<HomePage> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 8),
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.folder_rounded,
-                        color: Colors.amber, size: 24),
+                    const Icon(
+                      Icons.folder_rounded,
+                      color: Colors.amber,
+                      size: 24,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         folder.name,
                         style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 16),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -393,8 +410,10 @@ class HomePageState extends State<HomePage> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.drive_file_rename_outline,
-                    color: Colors.orange),
+                leading: const Icon(
+                  Icons.drive_file_rename_outline,
+                  color: Colors.orange,
+                ),
                 title: const Text('Переименовать'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -403,17 +422,20 @@ class HomePageState extends State<HomePage> {
                     onRename: (newName) async {
                       try {
                         await _repo.renameItem(
-                            type: 'folder',
-                            id: folder.id,
-                            name: newName);
+                          type: 'folder',
+                          id: folder.id,
+                          name: newName,
+                        );
                         if (!mounted) return;
                         _loadContent();
                       } on AppException catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(e.message),
-                          backgroundColor: Colors.red,
-                        ));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.message),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
                       }
                     },
                   );
@@ -421,24 +443,27 @@ class HomePageState extends State<HomePage> {
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Удалить',
-                    style: TextStyle(color: Colors.red)),
+                title: const Text(
+                  'Удалить',
+                  style: TextStyle(color: Colors.red),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showDeleteConfirmDialog(
                     itemName: folder.name,
                     onConfirm: () async {
                       try {
-                        await _repo.deleteItem(
-                            type: 'folder', id: folder.id);
+                        await _repo.deleteItem(type: 'folder', id: folder.id);
                         if (!mounted) return;
                         _loadContent();
                       } on AppException catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(e.message),
-                          backgroundColor: Colors.red,
-                        ));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.message),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
                       }
                     },
                   );
@@ -458,8 +483,7 @@ class HomePageState extends State<HomePage> {
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius:
-          BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: SafeArea(
@@ -477,18 +501,27 @@ class HomePageState extends State<HomePage> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 8),
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.insert_drive_file_rounded,
-                        color: Color(0xFF1A73E8), size: 24),
+                    const Icon(
+                      Icons.insert_drive_file_rounded,
+                      color: Color(0xFF1A73E8),
+                      size: 24,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(file.name,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 16),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        file.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -501,18 +534,16 @@ class HomePageState extends State<HomePage> {
                       : Icons.star_border_rounded,
                   color: file.isFavourite ? Colors.amber : Colors.grey,
                 ),
-                title: Text(file.isFavourite
-                    ? 'Убрать из избранного'
-                    : 'В избранное'),
+                title: Text(
+                  file.isFavourite ? 'Убрать из избранного' : 'В избранное',
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
-                  // ✅ Задача 6: без перезагрузки страницы
                   _toggleFavouriteLocal(file);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.download_rounded,
-                    color: Colors.blue),
+                leading: const Icon(Icons.download_rounded, color: Colors.blue),
                 title: const Text('Скачать'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -520,8 +551,10 @@ class HomePageState extends State<HomePage> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.drive_file_rename_outline,
-                    color: Colors.orange),
+                leading: const Icon(
+                  Icons.drive_file_rename_outline,
+                  color: Colors.orange,
+                ),
                 title: const Text('Переименовать'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -530,15 +563,20 @@ class HomePageState extends State<HomePage> {
                     onRename: (newName) async {
                       try {
                         await _repo.renameItem(
-                            type: 'file', id: file.id, name: newName);
+                          type: 'file',
+                          id: file.id,
+                          name: newName,
+                        );
                         if (!mounted) return;
                         _loadContent();
                       } on AppException catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(e.message),
-                          backgroundColor: Colors.red,
-                        ));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.message),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
                       }
                     },
                   );
@@ -546,24 +584,27 @@ class HomePageState extends State<HomePage> {
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Удалить',
-                    style: TextStyle(color: Colors.red)),
+                title: const Text(
+                  'Удалить',
+                  style: TextStyle(color: Colors.red),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showDeleteConfirmDialog(
                     itemName: file.name,
                     onConfirm: () async {
                       try {
-                        await _repo.deleteItem(
-                            type: 'file', id: file.id);
+                        await _repo.deleteItem(type: 'file', id: file.id);
                         if (!mounted) return;
                         _loadContent();
                       } on AppException catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(e.message),
-                          backgroundColor: Colors.red,
-                        ));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(e.message),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
                       }
                     },
                   );
@@ -576,43 +617,64 @@ class HomePageState extends State<HomePage> {
     );
   }
 
-  // ✅ Задача 6: обновление только конкретного файла в списке — БЕЗ перезагрузки
+  // ✅ ФИК #2: используем favouriteId (int) для удаления, не file.id (uuid)
   Future<void> _toggleFavouriteLocal(FileModel file) async {
-    // 1. Сразу обновляем UI локально (мгновенно, без мигания)
     final index = _files.indexWhere((f) => f.id == file.id);
     if (index == -1) return;
 
     final wasInFavourites = file.isFavourite;
 
-    // Создаём обновлённую копию файла с новым значением isFavourite
-    final updatedFile = FileModel(
-      id: file.id,
-      name: file.name,
-      size: file.size,
-      mimeType: file.mimeType,
-      uploadStatus: file.uploadStatus,
-      createdAt: file.createdAt,
-      isFavourite: !wasInFavourites,
-      favouriteId: file.favouriteId,
-    );
-
+    // Мгновенно обновляем UI
     setState(() {
-      _files[index] = updatedFile;
+      _files[index] = file.copyWith(isFavourite: !wasInFavourites);
     });
 
-    // 2. Отправляем запрос на сервер в фоне
     try {
       if (wasInFavourites) {
-        await _repo.removeFromFavourites(file.id);
+        // ✅ ИСПРАВЛЕНО: нужен favouriteId (integer record id), не file.id (uuid)
+        final favId = file.favouriteId;
+        if (favId == null) {
+          // Если favouriteId не сохранён в модели — загружаем список избранного
+          // и ищем нужный record id
+          final favList = await _repo.getFavouriteFiles();
+          final record = favList.firstWhere(
+            (f) => f['file']?['id']?.toString() == file.id,
+            orElse: () => <String, dynamic>{},
+          );
+          final resolvedId = record['id']?.toString();
+          if (resolvedId == null) {
+            // Не нашли — откатываем UI
+            if (!mounted) return;
+            setState(() => _files[index] = file);
+            return;
+          }
+          await _repo.removeFromFavourites(resolvedId);
+        } else {
+          await _repo.removeFromFavourites(favId);
+        }
+        // После удаления сбрасываем favouriteId в модели
+        if (!mounted) return;
+        setState(() {
+          _files[index] = _files[index].copyWith(
+            isFavourite: false,
+            favouriteId: null,
+          );
+        });
       } else {
-        await _repo.addToFavourites(file.id);
+        // Добавляем и сохраняем вернувшийся integer record id
+        final recordId = await _repo.addToFavourites(file.id);
+        if (!mounted) return;
+        setState(() {
+          _files[index] = _files[index].copyWith(
+            isFavourite: true,
+            favouriteId: recordId.toString(),
+          );
+        });
       }
     } on AppException catch (e) {
-      // Если ошибка — откатываем изменение обратно
+      // Ошибка — откатываем изменение
       if (!mounted) return;
-      setState(() {
-        _files[index] = file; // возвращаем старый
-      });
+      setState(() => _files[index] = file);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message), backgroundColor: Colors.red),
       );
@@ -627,8 +689,7 @@ class HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Переименовать'),
         content: TextField(
           controller: controller,
@@ -643,8 +704,7 @@ class HomePageState extends State<HomePage> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-              const BorderSide(color: Colors.blue, width: 1.5),
+              borderSide: const BorderSide(color: Colors.blue, width: 1.5),
             ),
           ),
         ),
@@ -666,10 +726,13 @@ class HomePageState extends State<HomePage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: const Text('Сохранить',
-                style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Сохранить',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -683,8 +746,7 @@ class HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Удалить?'),
         content: Text(
           'Вы уверены, что хотите удалить «$itemName»?\nЭто действие необратимо.',
@@ -702,10 +764,10 @@ class HomePageState extends State<HomePage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: const Text('Удалить',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('Удалить', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -723,20 +785,21 @@ class HomePageState extends State<HomePage> {
           SliverToBoxAdapter(child: _buildStorageInfo()),
           if (_isLoading)
             const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()))
+              child: Center(child: CircularProgressIndicator()),
+            )
           else if (_error != null)
             SliverFillRemaining(child: _buildError())
           else if (_showFavourites && _favouriteFiles.isEmpty)
-              SliverFillRemaining(child: _buildEmptyFavourites())
-            else if (!_showFavourites &&
-                  _displayFolders.isEmpty &&
-                  _displayFiles.isEmpty)
-                SliverFillRemaining(child: _buildEmpty())
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: _buildContent(),
-                ),
+            SliverFillRemaining(child: _buildEmptyFavourites())
+          else if (!_showFavourites &&
+              _displayFolders.isEmpty &&
+              _displayFiles.isEmpty)
+            SliverFillRemaining(child: _buildEmpty())
+          else
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: _buildContent(),
+            ),
         ],
       ),
       floatingActionButton: _buildFABs(),
@@ -756,9 +819,13 @@ class HomePageState extends State<HomePage> {
             backgroundColor: Colors.blue,
             elevation: 4,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: const Icon(Icons.cloud_upload_rounded,
-                color: Colors.white, size: 26),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.cloud_upload_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -771,9 +838,9 @@ class HomePageState extends State<HomePage> {
             backgroundColor: Colors.blue,
             elevation: 4,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: const Icon(Icons.add_rounded,
-                color: Colors.white, size: 28),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
           ),
         ),
       ],
@@ -796,17 +863,19 @@ class HomePageState extends State<HomePage> {
             Text(
               'Welcome back,',
               style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 11,
-                  fontWeight: FontWeight.normal),
+                color: Colors.grey[500],
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
               _userName ?? 'User',
               style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20),
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -815,7 +884,6 @@ class HomePageState extends State<HomePage> {
         background: Container(color: Colors.white),
       ),
       actions: [
-        // ✅ Задача 4: только звёздочка, БЕЗ кнопки фильтра рядом
         IconButton(
           icon: Icon(
             _showFavourites ? Icons.star_rounded : Icons.star_border_rounded,
@@ -829,8 +897,9 @@ class HomePageState extends State<HomePage> {
         ),
         IconButton(
           icon: Icon(
-              _isGrid ? Icons.view_list : Icons.grid_view,
-              color: Colors.black),
+            _isGrid ? Icons.view_list : Icons.grid_view,
+            color: Colors.black,
+          ),
           onPressed: () => setState(() => _isGrid = !_isGrid),
         ),
         IconButton(
@@ -860,7 +929,9 @@ class HomePageState extends State<HomePage> {
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: _breadcrumb.isEmpty && !_showFavourites
                       ? Colors.blue.withValues(alpha: 0.1)
@@ -869,11 +940,13 @@ class HomePageState extends State<HomePage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.home_rounded,
-                        size: 16,
-                        color: _breadcrumb.isEmpty && !_showFavourites
-                            ? Colors.blue
-                            : Colors.grey),
+                    Icon(
+                      Icons.home_rounded,
+                      size: 16,
+                      color: _breadcrumb.isEmpty && !_showFavourites
+                          ? Colors.blue
+                          : Colors.grey,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Главная',
@@ -881,8 +954,7 @@ class HomePageState extends State<HomePage> {
                         color: _breadcrumb.isEmpty && !_showFavourites
                             ? Colors.blue
                             : Colors.grey,
-                        fontWeight:
-                        _breadcrumb.isEmpty && !_showFavourites
+                        fontWeight: _breadcrumb.isEmpty && !_showFavourites
                             ? FontWeight.w600
                             : FontWeight.normal,
                         fontSize: 13,
@@ -893,39 +965,41 @@ class HomePageState extends State<HomePage> {
               ),
             ),
             if (_showFavourites) ...[
-              const Icon(Icons.chevron_right,
-                  size: 16, color: Colors.grey),
+              const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.star_rounded,
-                        size: 14, color: Colors.amber),
+                child: const Row(
+                  children: [
+                    Icon(Icons.star_rounded, size: 14, color: Colors.amber),
                     SizedBox(width: 4),
                     Text(
                       'Избранное',
                       style: TextStyle(
-                          color: Colors.amber,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13),
+                        color: Colors.amber,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
             for (int i = 0; i < _breadcrumb.length; i++) ...[
-              const Icon(Icons.chevron_right,
-                  size: 16, color: Colors.grey),
+              const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
               GestureDetector(
                 onTap: () => _navigateTo(i),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: i == _breadcrumb.length - 1
                         ? Colors.blue.withValues(alpha: 0.1)
@@ -975,16 +1049,20 @@ class HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('My Cloud Storage',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15)),
+                const Text(
+                  'My Cloud Storage',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
                 Text(
                   '${_folders.length} папок · ${_files.length} файлов · всего $total',
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 12),
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -997,21 +1075,29 @@ class HomePageState extends State<HomePage> {
               }),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.star_rounded,
-                        color: Colors.amber, size: 16),
+                    const Icon(
+                      Icons.star_rounded,
+                      color: Colors.amber,
+                      size: 16,
+                    ),
                     const SizedBox(width: 4),
-                    Text('$favCount',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
+                    Text(
+                      '$favCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1044,10 +1130,12 @@ class HomePageState extends State<HomePage> {
         _downloadProgress.remove(file.id);
         _downloadReceivedBytes.remove(file.id);
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Файл сохранён: ${file.name}'),
-        backgroundColor: Colors.green,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Файл сохранён: ${file.name}'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } on AppException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1055,45 +1143,51 @@ class HomePageState extends State<HomePage> {
         _downloadReceivedBytes.remove(file.id);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red));
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+      );
     }
   }
 
   Widget _buildContent() {
     return SliverList(
       delegate: SliverChildListDelegate([
-        // ── Шапка избранного с фильтром ──────────────────────────────
         if (_showFavourites) ...[
           Row(
             children: [
               const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
               const SizedBox(width: 6),
-              const Text('Избранное',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: Colors.black87)),
+              const Text(
+                'Избранное',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: Colors.black87,
+                ),
+              ),
               const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text('${_displayFiles.length}',
-                    style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.amber,
-                        fontWeight: FontWeight.w600)),
+                child: Text(
+                  '${_displayFiles.length}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.amber,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               const Spacer(),
-              // ✅ Фильтр кнопка ВНУТРИ контента избранного (не в AppBar)
               GestureDetector(
                 onTap: _showFilterSheet,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _activeFilter != _FilterType.all
                         ? Colors.blue.withValues(alpha: 0.1)
@@ -1102,11 +1196,13 @@ class HomePageState extends State<HomePage> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.filter_list_rounded,
-                          size: 14,
-                          color: _activeFilter != _FilterType.all
-                              ? Colors.blue
-                              : Colors.grey),
+                      Icon(
+                        Icons.filter_list_rounded,
+                        size: 14,
+                        color: _activeFilter != _FilterType.all
+                            ? Colors.blue
+                            : Colors.grey,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         _activeFilter == _FilterType.images
@@ -1133,24 +1229,32 @@ class HomePageState extends State<HomePage> {
 
         if (_displayFolders.isNotEmpty) ...[
           _buildSectionHeader(
-              'Папки', Icons.folder_rounded, _displayFolders.length),
+            'Папки',
+            Icons.folder_rounded,
+            _displayFolders.length,
+          ),
           const SizedBox(height: 8),
           _isGrid ? _buildFoldersGrid() : _buildFoldersList(),
           const SizedBox(height: 20),
         ],
         if (_displayFiles.isNotEmpty) ...[
           if (!_showFavourites)
-            _buildSectionHeader('Файлы', Icons.insert_drive_file,
-                _displayFiles.length),
+            _buildSectionHeader(
+              'Файлы',
+              Icons.insert_drive_file,
+              _displayFiles.length,
+            ),
           const SizedBox(height: 8),
-          ..._displayFiles.map((f) => _FileTile(
-            file: f,
-            onMenuTap: () => _showFileMenu(f),
-            downloadProgress: _downloadProgress[f.id],
-            downloadReceivedBytes: _downloadReceivedBytes[f.id],
-            // ✅ Задача 6: мгновенное переключение без перезагрузки
-            onFavouriteTap: () => _toggleFavouriteLocal(f),
-          )),
+          ..._displayFiles.map(
+            (f) => _FileTile(
+              file: f,
+              authToken: _authToken,
+              onMenuTap: () => _showFileMenu(f),
+              downloadProgress: _downloadProgress[f.id],
+              downloadReceivedBytes: _downloadReceivedBytes[f.id],
+              onFavouriteTap: () => _toggleFavouriteLocal(f),
+            ),
+          ),
         ],
       ]),
     );
@@ -1161,24 +1265,29 @@ class HomePageState extends State<HomePage> {
       children: [
         Icon(icon, size: 18, color: Colors.grey[600]),
         const SizedBox(width: 6),
-        Text(title,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-                color: Colors.black87)),
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: Colors.black87,
+          ),
+        ),
         const SizedBox(width: 6),
         Container(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
             color: Colors.blue.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Text('$count',
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.blue,
-                  fontWeight: FontWeight.w600)),
+          child: Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.blue,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );
@@ -1206,11 +1315,13 @@ class HomePageState extends State<HomePage> {
   Widget _buildFoldersList() {
     return Column(
       children: _displayFolders
-          .map((f) => _FolderListTile(
-        folder: f,
-        onTap: () => _openFolder(f),
-        onMenuTap: () => _showFolderMenu(f),
-      ))
+          .map(
+            (f) => _FolderListTile(
+              folder: f,
+              onTap: () => _openFolder(f),
+              onMenuTap: () => _showFolderMenu(f),
+            ),
+          )
           .toList(),
     );
   }
@@ -1222,9 +1333,11 @@ class HomePageState extends State<HomePage> {
         children: [
           Icon(Icons.wifi_off, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 16),
-          Text(_error!,
-              style: TextStyle(color: Colors.grey[600]),
-              textAlign: TextAlign.center),
+          Text(
+            _error!,
+            style: TextStyle(color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _loadContent,
@@ -1234,7 +1347,8 @@ class HomePageState extends State<HomePage> {
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],
@@ -1254,18 +1368,22 @@ class HomePageState extends State<HomePage> {
               color: Colors.blue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-            child:
-            const Icon(Icons.folder_open, size: 40, color: Colors.blue),
+            child: const Icon(Icons.folder_open, size: 40, color: Colors.blue),
           ),
           const SizedBox(height: 16),
-          const Text('Здесь пока пусто',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87)),
+          const Text(
+            'Здесь пока пусто',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('Создайте папку или загрузите фото / видео',
-              style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+          Text(
+            'Создайте папку или загрузите фото / видео',
+            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+          ),
         ],
       ),
     );
@@ -1283,18 +1401,26 @@ class HomePageState extends State<HomePage> {
               color: Colors.amber.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Icon(Icons.star_border_rounded,
-                size: 40, color: Colors.amber),
+            child: const Icon(
+              Icons.star_border_rounded,
+              size: 40,
+              color: Colors.amber,
+            ),
           ),
           const SizedBox(height: 16),
-          const Text('Нет избранных файлов',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87)),
+          const Text(
+            'Нет избранных файлов',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('Нажмите ★ на файле чтобы добавить',
-              style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+          Text(
+            'Нажмите ★ на файле чтобы добавить',
+            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+          ),
         ],
       ),
     );
@@ -1321,8 +1447,7 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding:
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: isActive
               ? const Color(0xFF1A73E8)
@@ -1332,15 +1457,20 @@ class _FilterChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 16,
-                color: isActive ? Colors.white : Colors.grey[600]),
+            Icon(
+              icon,
+              size: 16,
+              color: isActive ? Colors.white : Colors.grey[600],
+            ),
             const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: isActive ? Colors.white : Colors.grey[700])),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: isActive ? Colors.white : Colors.grey[700],
+              ),
+            ),
           ],
         ),
       ),
@@ -1354,10 +1484,11 @@ class _FolderCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onMenuTap;
 
-  const _FolderCard(
-      {required this.folder,
-        required this.onTap,
-        required this.onMenuTap});
+  const _FolderCard({
+    required this.folder,
+    required this.onTap,
+    required this.onMenuTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1389,8 +1520,11 @@ class _FolderCard extends StatelessWidget {
                     color: Colors.amber.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.folder_rounded,
-                      color: Colors.amber, size: 22),
+                  child: const Icon(
+                    Icons.folder_rounded,
+                    color: Colors.amber,
+                    size: 22,
+                  ),
                 ),
                 SizedBox(
                   width: 28,
@@ -1405,13 +1539,16 @@ class _FolderCard extends StatelessWidget {
               ],
             ),
             const Spacer(),
-            Text(folder.name,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: Colors.black87),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              folder.name,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: Colors.black87,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
@@ -1425,17 +1562,20 @@ class _FolderListTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onMenuTap;
 
-  const _FolderListTile(
-      {required this.folder,
-        required this.onTap,
-        required this.onMenuTap});
+  const _FolderListTile({
+    required this.folder,
+    required this.onTap,
+    required this.onMenuTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(12)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: ListTile(
         leading: Container(
           width: 42,
@@ -1444,12 +1584,16 @@ class _FolderListTile extends StatelessWidget {
             color: Colors.amber.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(Icons.folder_rounded,
-              color: Colors.amber, size: 22),
+          child: const Icon(
+            Icons.folder_rounded,
+            color: Colors.amber,
+            size: 22,
+          ),
         ),
-        title: Text(folder.name,
-            style: const TextStyle(
-                fontWeight: FontWeight.w500, fontSize: 14)),
+        title: Text(
+          folder.name,
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        ),
         trailing: IconButton(
           icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
           onPressed: onMenuTap,
@@ -1467,6 +1611,7 @@ class _FileTile extends StatelessWidget {
   final double? downloadProgress;
   final int? downloadReceivedBytes;
   final VoidCallback? onFavouriteTap;
+  final String? authToken;
 
   const _FileTile({
     required this.file,
@@ -1474,6 +1619,7 @@ class _FileTile extends StatelessWidget {
     this.downloadProgress,
     this.downloadReceivedBytes,
     this.onFavouriteTap,
+    this.authToken,
   });
 
   bool get _isDownloading => downloadProgress != null;
@@ -1488,6 +1634,75 @@ class _FileTile extends StatelessWidget {
     if (mime.startsWith('image/')) return const Color(0xFF34A853);
     if (mime.startsWith('video/')) return const Color(0xFFEA4335);
     return const Color(0xFF1A73E8);
+  }
+
+  Widget _buildLeading(Color color) {
+    final mime = file.mimeType.toLowerCase();
+    // Image preview via download endpoint
+    if (mime.startsWith('image/') && authToken != null) {
+      final url =
+          '${AppConfig.instance.baseUrl}content/files/${file.id}/download/';
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(
+          url,
+          headers: {'Authorization': 'Bearer $authToken'},
+          width: 42,
+          height: 42,
+          fit: BoxFit.cover,
+          cacheWidth: 126,
+          errorBuilder: (_, __, ___) => _iconBox(color),
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            return _iconBox(color);
+          },
+        ),
+      );
+    }
+    // Video — icon with play badge
+    if (mime.startsWith('video/')) {
+      return Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(Icons.videocam_rounded, color: color, size: 20),
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return _iconBox(color);
+  }
+
+  Widget _iconBox(Color color) {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(_icon(file.mimeType), color: color, size: 20),
+    );
   }
 
   @override
@@ -1513,54 +1728,52 @@ class _FileTile extends StatelessWidget {
           ListTile(
             leading: _isDownloading
                 ? SizedBox(
-              width: 42,
-              height: 42,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: downloadProgress,
-                    strokeWidth: 3,
-                    backgroundColor: Colors.grey[200],
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                        Color(0xFF1A73E8)),
-                  ),
-                  Text(
-                    '${((downloadProgress ?? 0) * 100).toInt()}%',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1A73E8)),
-                  ),
-                ],
-              ),
-            )
-                : Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(_icon(file.mimeType), color: color, size: 20),
+                    width: 42,
+                    height: 42,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: downloadProgress,
+                          strokeWidth: 3,
+                          backgroundColor: Colors.grey[200],
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xFF1A73E8),
+                          ),
+                        ),
+                        Text(
+                          '${((downloadProgress ?? 0) * 100).toInt()}%',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A73E8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : _buildLeading(color),
+            title: Text(
+              file.name,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            title: Text(file.name,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w500, fontSize: 14),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
             subtitle: _isDownloading
                 ? Text(
-                '${DownloadRepository.formatBytes(downloadReceivedBytes ?? 0)} / ${file.formattedSize}',
-                style: const TextStyle(
-                    color: Color(0xFF1A73E8), fontSize: 12))
-                : Text(file.formattedSize,
-                style:
-                TextStyle(color: Colors.grey[500], fontSize: 12)),
+                    '${DownloadRepository.formatBytes(downloadReceivedBytes ?? 0)} / ${file.formattedSize}',
+                    style: const TextStyle(
+                      color: Color(0xFF1A73E8),
+                      fontSize: 12,
+                    ),
+                  )
+                : Text(
+                    file.formattedSize,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ✅ Звёздочка прямо на тайле — мгновенное переключение
                 GestureDetector(
                   onTap: onFavouriteTap,
                   child: Padding(
@@ -1569,16 +1782,17 @@ class _FileTile extends StatelessWidget {
                       file.isFavourite
                           ? Icons.star_rounded
                           : Icons.star_border_rounded,
-                      color: file.isFavourite
-                          ? Colors.amber
-                          : Colors.grey[400],
+                      color: file.isFavourite ? Colors.amber : Colors.grey[400],
                       size: 20,
                     ),
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.more_vert,
-                      color: Colors.grey, size: 20),
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
                   onPressed: onMenuTap,
                 ),
               ],
@@ -1590,7 +1804,8 @@ class _FileTile extends StatelessWidget {
               minHeight: 3,
               backgroundColor: Colors.grey[200],
               valueColor: const AlwaysStoppedAnimation<Color>(
-                  Color(0xFF1A73E8)),
+                Color(0xFF1A73E8),
+              ),
             ),
         ],
       ),

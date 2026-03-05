@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+// Sentinel объект для различия "не передан" vs "передан null"
+const _absent = Object();
+
 class FileModel {
   final String id;
   final String name;
@@ -34,7 +37,8 @@ class FileModel {
     );
   }
 
-  // ✅ Задача 6: copyWith для мгновенного обновления без перезагрузки страницы
+  // ✅ FIX: sentinel позволяет явно передать favouriteId: null
+  // Без этого copyWith(favouriteId: null) возвращал бы старое значение
   FileModel copyWith({
     String? id,
     String? name,
@@ -43,7 +47,7 @@ class FileModel {
     String? uploadStatus,
     DateTime? createdAt,
     bool? isFavourite,
-    String? favouriteId,
+    Object? favouriteId = _absent, // ← Object? вместо String?
   }) {
     return FileModel(
       id: id ?? this.id,
@@ -53,7 +57,11 @@ class FileModel {
       uploadStatus: uploadStatus ?? this.uploadStatus,
       createdAt: createdAt ?? this.createdAt,
       isFavourite: isFavourite ?? this.isFavourite,
-      favouriteId: favouriteId ?? this.favouriteId,
+      // Если передан _absent — берём старое значение
+      // Если передан null или String — берём новое
+      favouriteId: identical(favouriteId, _absent)
+          ? this.favouriteId
+          : favouriteId as String?,
     );
   }
 

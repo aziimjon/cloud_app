@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../data/home_repository.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../../core/storage/secure_storage.dart';
+import '../../../core/config/app_config.dart';
 
 /// Shared with me — файлы расшаренные другими пользователями
 class SharedPage extends StatefulWidget {
@@ -17,6 +19,7 @@ class _SharedPageState extends State<SharedPage> {
   List<_SharedUser> _users = [];
   bool _isLoading = true;
   String? _error;
+  String? _authToken;
 
   // ✅ FIX: userId теперь String (бэкенд возвращает id как String или int)
   String? _selectedUserId;
@@ -28,6 +31,12 @@ class _SharedPageState extends State<SharedPage> {
   void initState() {
     super.initState();
     _loadSharedUsers();
+    _loadAuthToken();
+  }
+
+  Future<void> _loadAuthToken() async {
+    final token = await SecureStorage.getAccessToken();
+    if (mounted) setState(() => _authToken = token);
   }
 
   Future<void> _loadSharedUsers() async {
@@ -121,9 +130,9 @@ class _SharedPageState extends State<SharedPage> {
         elevation: 0,
         leading: _selectedUserId != null
             ? IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: _goBack,
-        )
+                icon: const Icon(Icons.arrow_back, color: Colors.black),
+                onPressed: _goBack,
+              )
             : null,
         title: Text(
           _selectedUserName ?? 'Shared with me',
@@ -237,8 +246,10 @@ class _SharedPageState extends State<SharedPage> {
           ],
         ),
         child: ListTile(
-          contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 8,
+          ),
           leading: Container(
             width: 44,
             height: 44,
@@ -250,9 +261,7 @@ class _SharedPageState extends State<SharedPage> {
             ),
             child: Center(
               child: Text(
-                user.fullName.isNotEmpty
-                    ? user.fullName[0].toUpperCase()
-                    : '?',
+                user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -297,10 +306,7 @@ class _SharedPageState extends State<SharedPage> {
           children: [
             Icon(Icons.folder_open, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 12),
-            Text(
-              'Здесь пока пусто',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
+            Text('Здесь пока пусто', style: TextStyle(color: Colors.grey[600])),
           ],
         ),
       );
@@ -345,23 +351,7 @@ class _SharedPageState extends State<SharedPage> {
           ],
         ),
         child: ListTile(
-          leading: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: isFolder
-                  ? Colors.amber.withValues(alpha: 0.15)
-                  : const Color(0xFF1A73E8).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              isFolder
-                  ? Icons.folder_rounded
-                  : Icons.insert_drive_file_rounded,
-              color: isFolder ? Colors.amber : const Color(0xFF1A73E8),
-              size: 22,
-            ),
-          ),
+          leading: _buildItemLeading(item, isFolder, id),
           title: Text(
             name,
             style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
@@ -372,6 +362,128 @@ class _SharedPageState extends State<SharedPage> {
               ? const Icon(Icons.chevron_right, color: Colors.grey)
               : null,
         ),
+      ),
+    );
+  }
+
+  Widget _buildItemLeading(
+    Map<String, dynamic> item,
+    bool isFolder,
+    String id,
+  ) {
+    if (isFolder) {
+      return Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.amber.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.folder_rounded, color: Colors.amber, size: 22),
+      );
+    }
+    // Decode mime_type if present
+    String mimeType = '';
+    final rawMime = item['mime_type'];
+    if (rawMime != null) {
+      try {
+        mimeType = utf8.decode(base64.decode(rawMime.toString()));
+      } catch (_) {
+        mimeType = rawMime.toString();
+      }
+    }
+    final mime = mimeType.toLowerCase();
+    if (mime.startsWith('image/') && _authToken != null && id.isNotEmpty) {
+      final url = '${AppConfig.instance.baseUrl}content/files/$id/download/';
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          url,
+          headers: {'Authorization': 'Bearer $_authToken'},
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          cacheWidth: 132,
+          errorBuilder: (_, __, ___) => Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.image_rounded,
+              color: Color(0xFF1A73E8),
+              size: 22,
+            ),
+          ),
+          loadingBuilder: (_, child, progress) {
+            if (progress == null) return child;
+            return Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.image_rounded,
+                color: Color(0xFF1A73E8),
+                size: 22,
+              ),
+            );
+          },
+        ),
+      );
+    }
+    if (mime.startsWith('video/')) {
+      return Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEA4335).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Icon(
+              Icons.videocam_rounded,
+              color: Color(0xFFEA4335),
+              size: 22,
+            ),
+            Positioned(
+              right: 2,
+              bottom: 2,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEA4335),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.insert_drive_file_rounded,
+        color: Color(0xFF1A73E8),
+        size: 22,
       ),
     );
   }
