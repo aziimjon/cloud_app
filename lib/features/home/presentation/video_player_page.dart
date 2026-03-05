@@ -71,22 +71,28 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: AnimatedOpacity(
-          opacity: _showControls ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 300),
-          child: AppBar(
-            backgroundColor: Colors.black45,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            title: Text(
-              widget.fileName,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
+        child: IgnorePointer(
+          ignoring: !_showControls,
+          child: AnimatedOpacity(
+            opacity: _showControls ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 300),
+            child: AppBar(
+              backgroundColor: Colors.black45,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              title: Text(
+                widget.fileName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
             ),
           ),
         ),
@@ -96,8 +102,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, color: Colors.grey, size: 64),
-                  SizedBox(height: 12),
+                  const Icon(Icons.error_outline, color: Colors.grey, size: 64),
+                  const SizedBox(height: 12),
                   Text(
                     'Error: $_errorMessage',
                     style: const TextStyle(color: Colors.grey),
@@ -120,70 +126,82 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                   ),
                   // Play / Pause overlay
-                  if (_showControls)
-                    GestureDetector(
-                      onTap: () {
-                        _controller.value.isPlaying
-                            ? _controller.pause()
-                            : _controller.play();
-                      },
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
+                  AnimatedOpacity(
+                    opacity: _showControls ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: IgnorePointer(
+                      ignoring: !_showControls,
+                      child: GestureDetector(
+                        onTap: () {
                           _controller.value.isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                          color: Colors.white,
-                          size: 36,
+                              ? _controller.pause()
+                              : _controller.play();
+                        },
+                        child: Container(
+                          width: 64,
+                          height: 64,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _controller.value.isPlaying
+                                ? Icons.pause
+                                : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 36,
+                          ),
                         ),
                       ),
                     ),
+                  ),
                   // Progress bar at bottom
-                  if (_showControls)
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 24,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          VideoProgressIndicator(
-                            _controller,
-                            allowScrubbing: true,
-                            colors: const VideoProgressColors(
-                              playedColor: Color(0xFF1A73E8),
-                              bufferedColor: Colors.white24,
-                              backgroundColor: Colors.white12,
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 32,
+                    child: IgnorePointer(
+                      ignoring: !_showControls,
+                      child: AnimatedOpacity(
+                        opacity: _showControls ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            VideoProgressIndicator(
+                              _controller,
+                              allowScrubbing: true,
+                              colors: const VideoProgressColors(
+                                playedColor: Color(0xFF1A73E8),
+                                bufferedColor: Colors.white24,
+                                backgroundColor: Colors.white12,
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
                             ),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                _formatDuration(_controller.value.position),
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _formatDuration(_controller.value.position),
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                _formatDuration(_controller.value.duration),
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
+                                Text(
+                                  _formatDuration(_controller.value.duration),
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),

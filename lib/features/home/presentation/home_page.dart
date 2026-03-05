@@ -97,13 +97,19 @@ class HomePageState extends State<HomePage> {
   Future<void> _openFileViewer(FileModel file) async {
     final mime = file.mimeType.toLowerCase();
     if (mime.startsWith('image/')) {
-      final previewUrl = _previewUrls[file.id];
-      if (previewUrl == null) return;
+      final fullUrl = await _repo.getPreviewUrl(file.id);
+      if (fullUrl == null) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось открыть изображение')),
+          );
+        return;
+      }
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) =>
-              PhotoViewerPage(imageUrl: previewUrl, fileName: file.name),
+              PhotoViewerPage(imageUrl: fullUrl, fileName: file.name),
         ),
       );
     } else if (mime.startsWith('video/')) {

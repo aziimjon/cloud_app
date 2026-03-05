@@ -81,16 +81,28 @@ class _SharedPageState extends State<SharedPage> {
 
     final mime = mimeType.toLowerCase();
     if (mime.startsWith('image/')) {
-      final previewUrl = _previewUrls[id];
-      if (previewUrl == null) return;
+      _openImageViewer(id, name);
+    } else if (mime.startsWith('video/')) {
+      _openVideoViewer(id, name);
+    }
+  }
+
+  Future<void> _openImageViewer(String fileId, String name) async {
+    final url = await _repo.getPreviewUrl(fileId);
+    if (url == null) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть изображение')),
+        );
+      return;
+    }
+    if (mounted) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PhotoViewerPage(imageUrl: previewUrl, fileName: name),
+          builder: (_) => PhotoViewerPage(imageUrl: url, fileName: name),
         ),
       );
-    } else if (mime.startsWith('video/')) {
-      _openVideoViewer(id, name);
     }
   }
 
