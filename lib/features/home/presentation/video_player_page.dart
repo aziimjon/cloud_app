@@ -21,6 +21,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   bool _hasError = false;
   String _errorMessage = '';
   bool _showControls = true;
+  bool _isMuted = false;
+  double _volume = 1.0;
 
   @override
   void initState() {
@@ -62,6 +64,21 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       return '${d.inHours}:$minutes:$seconds';
     }
     return '$minutes:$seconds';
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+      _controller.setVolume(_isMuted ? 0.0 : _volume);
+    });
+  }
+
+  void _setVolume(double value) {
+    setState(() {
+      _volume = value;
+      _isMuted = value == 0.0;
+      _controller.setVolume(value);
+    });
   }
 
   @override
@@ -155,7 +172,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                       ),
                     ),
                   ),
-                  // Progress bar at bottom
+                  // Bottom controls: progress + volume
                   Positioned(
                     left: 16,
                     right: 16,
@@ -179,8 +196,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                               padding: const EdgeInsets.symmetric(vertical: 8),
                             ),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
+                                // Time position
                                 Text(
                                   _formatDuration(_controller.value.position),
                                   style: const TextStyle(
@@ -188,6 +205,49 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                                     fontSize: 12,
                                   ),
                                 ),
+                                const Spacer(),
+                                // Mute/unmute button
+                                GestureDetector(
+                                  onTap: _toggleMute,
+                                  child: Icon(
+                                    _isMuted || _volume == 0.0
+                                        ? Icons.volume_off
+                                        : _volume < 0.5
+                                        ? Icons.volume_down
+                                        : Icons.volume_up,
+                                    color: Colors.white70,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                // Volume slider
+                                SizedBox(
+                                  width: 80,
+                                  child: SliderTheme(
+                                    data: SliderTheme.of(context).copyWith(
+                                      trackHeight: 2,
+                                      thumbShape: const RoundSliderThumbShape(
+                                        enabledThumbRadius: 6,
+                                      ),
+                                      overlayShape:
+                                          const RoundSliderOverlayShape(
+                                            overlayRadius: 12,
+                                          ),
+                                      activeTrackColor: const Color(0xFF1A73E8),
+                                      inactiveTrackColor: Colors.white24,
+                                      thumbColor: Colors.white,
+                                      overlayColor: Colors.white24,
+                                    ),
+                                    child: Slider(
+                                      value: _isMuted ? 0.0 : _volume,
+                                      min: 0.0,
+                                      max: 1.0,
+                                      onChanged: _setVolume,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Time duration
                                 Text(
                                   _formatDuration(_controller.value.duration),
                                   style: const TextStyle(

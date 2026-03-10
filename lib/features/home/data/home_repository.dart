@@ -7,6 +7,22 @@ import 'models/file_model.dart';
 class HomeRepository {
   final Dio _dio = DioClient.instance;
 
+  String _extractError(dynamic data) {
+    if (data == null) return 'Unknown error';
+    if (data is Map) {
+      if (data.containsKey('detail')) return data['detail'].toString();
+      if (data.containsKey('message')) return data['message'].toString();
+      if (data.containsKey('non_field_errors')) {
+        final errs = data['non_field_errors'];
+        return errs is List ? errs.join(', ') : errs.toString();
+      }
+      return data.values.join(', ');
+    } else if (data is List) {
+      return data.join(', ');
+    }
+    return data.toString();
+  }
+
   Future<Map<String, dynamic>> getContent({String? parentId}) async {
     try {
       final List<dynamic> allResults = [];
@@ -114,14 +130,52 @@ class HomeRepository {
     }
   }
 
-  Future<List<dynamic>> getFavouriteFiles() async {
+  Future<void> moveItems({
+    required String? targetFolderId,
+    required List<String> files,
+    required List<String> folders,
+  }) async {
     try {
-      final response = await _dio.get('/content/favourite-file/');
-      return response.data['results'] ?? response.data ?? [];
+      await _dio.patch(
+        '/content/folder-file/move/',
+        data: {
+          'target_folder': targetFolderId,
+          'files': files,
+          'folders': folders,
+        },
+      );
     } on DioException catch (e) {
       throw AppException(
-        message:
-            e.response?.data?['message'] ?? 'Не удалось загрузить избранное',
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'Не удалось переместить файлы',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<List<dynamic>> getFavouriteFiles() async {
+    try {
+      String? nextUrl = '/content/favourite-file/';
+      List<dynamic> allResults = [];
+      while (nextUrl != null) {
+        final response = await _dio.get(nextUrl);
+        if (response.data is Map<String, dynamic> &&
+            response.data.containsKey('results')) {
+          allResults.addAll(response.data['results']);
+          nextUrl = response.data['next'];
+        } else {
+          // Fallback if not paginated
+          allResults.addAll(response.data is List ? response.data : []);
+          nextUrl = null;
+        }
+      }
+      return allResults;
+    } on DioException catch (e) {
+      throw AppException(
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'Не удалось загрузить избранное',
         statusCode: e.response?.statusCode,
       );
     }
@@ -136,20 +190,22 @@ class HomeRepository {
       return response.data['id'] as int;
     } on DioException catch (e) {
       throw AppException(
-        message:
-            e.response?.data?['message'] ?? 'Не удалось добавить в избранное',
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'Не удалось добавить в избранное',
         statusCode: e.response?.statusCode,
       );
     }
   }
 
-  Future<void> removeFromFavourites(String favId) async {
+  Future<void> removeFromFavourites(String fileId) async {
     try {
-      await _dio.delete('/content/favourite-file/$favId/');
+      await _dio.delete('/content/favourite-file/$fileId/');
     } on DioException catch (e) {
       throw AppException(
-        message:
-            e.response?.data?['message'] ?? 'Не удалось убрать из избранного',
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'Не удалось убрать из избранного',
         statusCode: e.response?.statusCode,
       );
     }

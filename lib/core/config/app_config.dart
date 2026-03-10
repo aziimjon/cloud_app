@@ -18,17 +18,15 @@ class AppConfig {
       case Environment.dev:
         instance = const AppConfig(
           environment: Environment.dev,
-          // ✅ ИСПРАВЛЕНО: /server/api/v1/ — рабочий путь (не /api/v1/)
-          baseUrl: 'http://192.168.1.100:8000/api/v1/',
-          // TUS работает на отдельном порту 1080
-          tusUrl: 'http://192.168.1.100:1080/files/',
+          baseUrl: 'http://94.158.52.27:8000/api/v1/',
+          tusUrl: 'http://94.158.52.27:1080/files',
         );
         break;
       case Environment.prod:
         instance = const AppConfig(
           environment: Environment.prod,
-          baseUrl: 'https://api.yourdomain.com/server/api/v1',
-          tusUrl: 'https://api.yourdomain.com:1080/files/',
+          baseUrl: 'http://94.158.52.27:8000/api/v1/',
+          tusUrl: 'http://94.158.52.27:1080/files',
         );
         break;
     }
