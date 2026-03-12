@@ -130,6 +130,25 @@ class HomeRepository {
     }
   }
 
+  Future<void> deleteItems({
+    required List<String> files,
+    required List<String> folders,
+  }) async {
+    try {
+      await _dio.delete(
+        '/content/folder-file/delete/',
+        data: {'files': files, 'folders': folders},
+      );
+    } on DioException catch (e) {
+      throw AppException(
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'Не удалось удалить выбранные элементы',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
   Future<void> moveItems({
     required String? targetFolderId,
     required List<String> files,
@@ -206,6 +225,59 @@ class HomeRepository {
         message: _extractError(e.response?.data) != 'Unknown error'
             ? _extractError(e.response?.data)
             : 'Не удалось убрать из избранного',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getPinnedFolders() async {
+    try {
+      final response = await _dio.get('/content/pinned-folders/');
+      List<dynamic> raw = [];
+      if (response.data is List) {
+        raw = response.data as List;
+      } else if (response.data is Map && response.data['results'] != null) {
+        raw = response.data['results'] as List;
+      }
+      return raw.map((item) {
+        final folder = FolderModel.fromJson(item['folder'] as Map<String, dynamic>);
+        return <String, dynamic>{
+          'pinId': folder.id, // String UUID
+          'folder': folder,
+        };
+      }).toList();
+    } on DioException catch (e) {
+      throw AppException(
+        message: e.response?.data?['message'] ?? 'Не удалось загрузить закрепленные папки',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<void> pinFolder(String folderUuid) async {
+    try {
+      await _dio.post(
+        '/content/pinned-folders/',
+        data: {'folder': folderUuid},
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 400 && 
+          e.response?.data?['message_key'] == 'you_can_pin_maximum_5_folders') {
+        throw AppException(message: 'Максимум 5 закреплённых папок');
+      }
+      throw AppException(
+        message: e.response?.data?['message'] ?? 'Не удалось закрепить папку',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<void> unpinFolder(String folderUuid) async {
+    try {
+      await _dio.delete('/content/pinned-folders/$folderUuid/');
+    } on DioException catch (e) {
+      throw AppException(
+        message: e.response?.data?['message'] ?? 'Не удалось открепить папку',
         statusCode: e.response?.statusCode,
       );
     }

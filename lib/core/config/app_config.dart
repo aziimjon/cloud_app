@@ -18,15 +18,15 @@ class AppConfig {
       case Environment.dev:
         instance = const AppConfig(
           environment: Environment.dev,
-          baseUrl: 'http://94.158.52.27:8000/api/v1/',
-          tusUrl: 'http://94.158.52.27:1080/files',
+          baseUrl: 'https://api-cloud.zerodev.uz/api/v1/',
+          tusUrl: 'https://minio1.zerodev.uz/files/',
         );
         break;
       case Environment.prod:
         instance = const AppConfig(
           environment: Environment.prod,
-          baseUrl: 'http://94.158.52.27:8000/api/v1/',
-          tusUrl: 'http://94.158.52.27:1080/files',
+          baseUrl: 'https://api-cloud.zerodev.uz/api/v1/',
+          tusUrl: 'https://minio1.zerodev.uz/files/',
         );
         break;
     }

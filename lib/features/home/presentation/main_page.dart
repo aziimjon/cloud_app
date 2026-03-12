@@ -5,6 +5,7 @@ import 'shared_page.dart';
 import '../../upload/presentation/upload_page.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../auth/presentation/login_page.dart';
+import '../../profile/presentation/profile_page.dart';
 import '../data/home_repository.dart';
 import '../data/models/file_model.dart';
 import '../../../core/errors/app_exception.dart';
@@ -55,7 +56,7 @@ class _MainPageState extends State<MainPage> {
               },
             ),
             const SharedPage(),
-            _ProfilePage(onLogout: _logout),
+            ProfilePage(onLogout: _logout),
           ],
         ),
         bottomNavigationBar: _buildBottomNav(),
@@ -558,92 +559,6 @@ class _RecentPageState extends State<_RecentPage> {
                 },
               ),
             ),
-    );
-  }
-}
-
-// ── Profile Page ──────────────────────────────────────────────────────────────
-
-class _ProfilePage extends StatelessWidget {
-  final VoidCallback onLogout;
-  const _ProfilePage({required this.onLogout});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1A73E8), Color(0xFF4A90E2)],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'My Profile',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'My Cloud User',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              color: Colors.white,
-              child: ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.logout, color: Colors.red, size: 20),
-                ),
-                title: const Text(
-                  'Log Out',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                onTap: onLogout,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

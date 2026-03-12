@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../data/home_repository.dart';
 import '../data/download_repository.dart';
@@ -11,6 +12,7 @@ import '../../upload/presentation/upload_page.dart';
 import 'photo_viewer_page.dart';
 import 'video_player_page.dart';
 import '../../../core/providers/favourites_provider.dart';
+import '../../profile/data/profile_repository.dart';
 
 // ✅ Задача 5: только Все, Фото, Видео
 enum _FilterType { all, images, videos }
@@ -27,6 +29,8 @@ class HomePage extends StatefulWidget {
 class HomePageState extends State<HomePage> {
   final _repo = HomeRepository();
   final _downloadRepo = DownloadRepository();
+  final _profileRepo = ProfileRepository();
+  Map<String, dynamic> _storageData = {};
 
   List<FolderModel> _folders = [];
   List<FileModel> _files = [];
@@ -45,9 +49,94 @@ class HomePageState extends State<HomePage> {
   bool _showFavourites = false;
   _FilterType _activeFilter = _FilterType.all;
 
-  bool _isSelectionMode = false;
+  bool get _isSelectionMode =>
+      _selectedFiles.isNotEmpty || _selectedFolders.isNotEmpty;
   final Set<String> _selectedFiles = {};
   final Set<String> _selectedFolders = {};
+
+  List<Map<String, dynamic>> _pinnedFolders = [];
+  int _folderPage = 0;
+  int _filePage = 0;
+
+  Widget _buildPaginationRow({
+    required int page,
+    required bool isLastPage,
+    required ValueChanged<int> onPageChanged,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chevron_left),
+          onPressed: page == 0 ? null : () => onPageChanged(page - 1),
+        ),
+        Text('${page + 1}', style: const TextStyle(fontSize: 14, color: Colors.grey)),
+        IconButton(
+          icon: const Icon(Icons.chevron_right),
+          onPressed: isLastPage ? null : () => onPageChanged(page + 1),
+        ),
+      ],
+    );
+  }
+
+  String? _getPinId(String folderId) {
+    for (final pin in _pinnedFolders) {
+      final folder = pin['folder'];
+      if (folder is FolderModel && folder.id == folderId) return pin['pinId'] as String?;
+    }
+    return null;
+  }
+
+  Future<void> _pinFolder(FolderModel folder) async {
+    if (_pinnedFolders.length >= 5) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Максимум 5 закреплённых папок')),
+        );
+      }
+      return;
+    }
+    if (_getPinId(folder.id) != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Папка уже закреплена')),
+        );
+      }
+      return;
+    }
+    // Optimistic update
+    final newPin = {'pinId': folder.id, 'folder': folder};
+    setState(() => _pinnedFolders = [..._pinnedFolders, newPin]);
+    try {
+      await _repo.pinFolder(folder.id);
+    } on AppException catch (e) {
+      // Revert on error
+      setState(() => _pinnedFolders = _pinnedFolders.where((p) => p['pinId'] != folder.id).toList());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _unpinFolder(String pinId) async {
+    // Save for revert
+    final backup = List<Map<String, dynamic>>.from(_pinnedFolders);
+    // Optimistic remove
+    setState(() => _pinnedFolders = _pinnedFolders.where((p) => p['pinId'] != pinId).toList());
+    try {
+      await _repo.unpinFolder(pinId);
+    } on AppException catch (e) {
+      // Revert on error
+      setState(() => _pinnedFolders = backup);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    }
+  }
 
   void _toggleFolderSelection(String id) {
     setState(() {
@@ -56,7 +145,6 @@ class HomePageState extends State<HomePage> {
       } else {
         _selectedFolders.add(id);
       }
-      _checkSelectionModeEmpty();
     });
   }
 
@@ -67,14 +155,7 @@ class HomePageState extends State<HomePage> {
       } else {
         _selectedFiles.add(id);
       }
-      _checkSelectionModeEmpty();
     });
-  }
-
-  void _checkSelectionModeEmpty() {
-    if (_selectedFiles.isEmpty && _selectedFolders.isEmpty) {
-      _isSelectionMode = false;
-    }
   }
 
   String? get _currentFolderId =>
@@ -111,6 +192,21 @@ class HomePageState extends State<HomePage> {
     }
   }
 
+  String _fmt(dynamic b) {
+    if (b == null) return '0 КБ';
+    final v = (b is num) ? b.toDouble() : double.tryParse(b.toString()) ?? 0;
+    if (v >= 1073741824) return '${(v / 1073741824).toStringAsFixed(2)} ГБ';
+    if (v >= 1048576) return '${(v / 1048576).toStringAsFixed(1)} МБ';
+    return '${(v / 1024).toStringAsFixed(0)} КБ';
+  }
+
+  Future<void> _loadStorageData() async {
+    try {
+      final data = await _profileRepo.getStorageUsed();
+      if (mounted) setState(() => _storageData = data);
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
@@ -118,6 +214,7 @@ class HomePageState extends State<HomePage> {
     _loadUserName();
     _loadContent();
     _loadAuthToken();
+    _loadStorageData();
   }
 
   Future<void> _loadAuthToken() async {
@@ -127,9 +224,8 @@ class HomePageState extends State<HomePage> {
 
   void _loadPreviewUrls(List<FileModel> files) {
     for (final f in files) {
-      final mime = f.mimeType.toLowerCase();
-      if (mime.startsWith('image/') &&
-          f.thumbnailPath != null &&
+      if (f.thumbnailPath != null &&
+          f.thumbnailPath!.isNotEmpty &&
           !_previewUrls.containsKey(f.id)) {
         _previewUrls[f.id] = f.thumbnailPath!;
       }
@@ -181,13 +277,20 @@ class HomePageState extends State<HomePage> {
     });
     try {
       final result = await _repo.getContent(parentId: _currentFolderId);
+      // Load pinned folders
+      List<Map<String, dynamic>> pinned = [];
+      try {
+        pinned = await _repo.getPinnedFolders();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _folders = result['folders'] as List<FolderModel>;
         _files = result['files'] as List<FileModel>;
+        _pinnedFolders = pinned;
         _isLoading = false;
       });
       _loadPreviewUrls(_files);
+      _loadStorageData();
     } on AppException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -231,6 +334,8 @@ class HomePageState extends State<HomePage> {
       _breadcrumb.add((id: folder.id, name: folder.name));
       _showFavourites = false;
       _activeFilter = _FilterType.all;
+      _folderPage = 0;
+      _filePage = 0;
     });
     widget.onFolderChanged?.call(folder.id);
     _loadContent();
@@ -239,11 +344,19 @@ class HomePageState extends State<HomePage> {
   void _navigateTo(int index) {
     if (index < 0) {
       if (_breadcrumb.isEmpty) return;
-      setState(() => _breadcrumb.clear());
+      setState(() {
+        _breadcrumb.clear();
+        _folderPage = 0;
+        _filePage = 0;
+      });
       widget.onFolderChanged?.call(null);
     } else {
       if (index == _breadcrumb.length - 1) return;
-      setState(() => _breadcrumb.removeRange(index + 1, _breadcrumb.length));
+      setState(() {
+        _breadcrumb.removeRange(index + 1, _breadcrumb.length);
+        _folderPage = 0;
+        _filePage = 0;
+      });
       widget.onFolderChanged?.call(_breadcrumb[index].id);
     }
     _loadContent();
@@ -445,16 +558,39 @@ class HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildBottomSheetItem({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+      minVerticalPadding: 0,
+      leading: Icon(icon, color: color, size: 22),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: color == Colors.red ? Colors.red : Colors.black87,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+
   void _showFolderMenu(FolderModel folder) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.only(top: 12),
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -496,20 +632,19 @@ class HomePageState extends State<HomePage> {
                 ),
               ),
               const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.folder_open, color: Colors.blue),
-                title: const Text('Открыть'),
+              _buildBottomSheetItem(
+                icon: Icons.folder_open,
+                color: Colors.blue,
+                title: 'Открыть',
                 onTap: () {
                   Navigator.pop(ctx);
                   _openFolder(folder);
                 },
               ),
-              ListTile(
-                leading: const Icon(
-                  Icons.drive_file_rename_outline,
-                  color: Colors.orange,
-                ),
-                title: const Text('Переименовать'),
+              _buildBottomSheetItem(
+                icon: Icons.drive_file_rename_outline,
+                color: Colors.orange,
+                title: 'Переименовать',
                 onTap: () {
                   Navigator.pop(ctx);
                   _showRenameDialog(
@@ -536,12 +671,38 @@ class HomePageState extends State<HomePage> {
                   );
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text(
-                  'Удалить',
-                  style: TextStyle(color: Colors.red),
-                ),
+              _buildBottomSheetItem(
+                icon: Icons.arrow_forward_rounded,
+                color: Colors.blue,
+                title: 'Переместить',
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final result = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MoveDestinationScreen(
+                        selectedFiles: const [],
+                        selectedFolders: [folder.id],
+                        currentFolderId: _currentFolderId,
+                      ),
+                    ),
+                  );
+                  if (result == true) {
+                    _loadContent();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Успешно перемещено'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                },
+              ),
+              _buildBottomSheetItem(
+                icon: Icons.delete_outline,
+                color: Colors.red,
+                title: 'Удалить',
                 onTap: () {
                   Navigator.pop(ctx);
                   _showDeleteConfirmDialog(
@@ -564,6 +725,25 @@ class HomePageState extends State<HomePage> {
                   );
                 },
               ),
+              Builder(
+                builder: (_) {
+                  final pinId = _getPinId(folder.id);
+                  final isPinned = pinId != null;
+                  return _buildBottomSheetItem(
+                    icon: Icons.push_pin_outlined,
+                    color: isPinned ? Colors.orange : Colors.blueGrey,
+                    title: isPinned ? '📌 Открепить' : '📌 Закрепить',
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      if (isPinned) {
+                        _unpinFolder(pinId);
+                      } else {
+                        _pinFolder(folder);
+                      }
+                    },
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -571,16 +751,29 @@ class HomePageState extends State<HomePage> {
     );
   }
 
+  IconData _icon(String mime) {
+    if (mime.startsWith('image/')) return Icons.image_rounded;
+    if (mime.startsWith('video/')) return Icons.videocam_rounded;
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Color _color(String mime) {
+    if (mime.startsWith('image/')) return const Color(0xFF34A853);
+    if (mime.startsWith('video/')) return const Color(0xFFEA4335);
+    return const Color(0xFF1A73E8);
+  }
+
   void _showFileMenu(FileModel file) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.only(top: 12),
         child: SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -601,56 +794,74 @@ class HomePageState extends State<HomePage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.insert_drive_file_rounded,
-                      color: Color(0xFF1A73E8),
-                      size: 24,
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: _color(file.mimeType).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _icon(file.mimeType),
+                        color: _color(file.mimeType),
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        file.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            file.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            file.formattedSize,
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
               const Divider(height: 1),
-              ListTile(
-                leading: Icon(
-                  file.isFavourite
-                      ? Icons.star_rounded
-                      : Icons.star_border_rounded,
-                  color: file.isFavourite ? Colors.amber : Colors.grey,
-                ),
-                title: Text(
-                  file.isFavourite ? 'Убрать из избранного' : 'В избранное',
-                ),
+              _buildBottomSheetItem(
+                icon: file.isFavourite
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                color: file.isFavourite ? Colors.amber : Colors.grey,
+                title: file.isFavourite
+                    ? 'Убрать из избранного'
+                    : 'В избранное',
                 onTap: () {
                   Navigator.pop(ctx);
                   FavouritesProvider.instance.toggleFavourite(file);
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.download_rounded, color: Colors.blue),
-                title: const Text('Скачать'),
+              _buildBottomSheetItem(
+                icon: Icons.download_rounded,
+                color: Colors.blue,
+                title: 'Скачать',
                 onTap: () {
                   Navigator.pop(ctx);
                   _startDownload(file);
                 },
               ),
-              ListTile(
-                leading: const Icon(
-                  Icons.drive_file_rename_outline,
-                  color: Colors.orange,
-                ),
-                title: const Text('Переименовать'),
+              _buildBottomSheetItem(
+                icon: Icons.drive_file_rename_outline,
+                color: Colors.orange,
+                title: 'Переименовать',
                 onTap: () {
                   Navigator.pop(ctx);
                   _showRenameDialog(
@@ -677,12 +888,38 @@ class HomePageState extends State<HomePage> {
                   );
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text(
-                  'Удалить',
-                  style: TextStyle(color: Colors.red),
-                ),
+              _buildBottomSheetItem(
+                icon: Icons.arrow_forward_rounded,
+                color: Colors.blue,
+                title: 'Переместить',
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final result = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MoveDestinationScreen(
+                        selectedFiles: [file.id],
+                        selectedFolders: const [],
+                        currentFolderId: _currentFolderId,
+                      ),
+                    ),
+                  );
+                  if (result == true) {
+                    _loadContent();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Успешно перемещено'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                },
+              ),
+              _buildBottomSheetItem(
+                icon: Icons.delete_outline,
+                color: Colors.red,
+                title: 'Удалить',
                 onTap: () {
                   Navigator.pop(ctx);
                   _showDeleteConfirmDialog(
@@ -811,33 +1048,44 @@ class HomePageState extends State<HomePage> {
       listenable: FavouritesProvider.instance,
       builder: (context, _) => Scaffold(
         backgroundColor: const Color(0xFFF5F7FA),
-        body: CustomScrollView(
-          slivers: [
-            _buildAppBar(),
-            SliverToBoxAdapter(child: _buildBreadcrumb()),
-            SliverToBoxAdapter(child: _buildStorageInfo()),
-            if (_isLoading)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
-              SliverFillRemaining(child: _buildError())
-            else if (FavouritesProvider.instance.isLoading && _showFavourites)
-              const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_showFavourites &&
-                FavouritesProvider.instance.favouriteFiles.isEmpty)
-              SliverFillRemaining(child: _buildEmptyFavourites())
-            else if (!_showFavourites &&
-                _displayFolders.isEmpty &&
-                _displayFiles.isEmpty)
-              SliverFillRemaining(child: _buildEmpty())
-            else
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: _buildContent(),
-              ),
+        body: Stack(
+          children: [
+            CustomScrollView(
+              slivers: [
+                _buildAppBar(),
+                SliverToBoxAdapter(child: _buildBreadcrumb()),
+                SliverToBoxAdapter(child: _buildStorageInfo()),
+                if (_isLoading)
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_error != null)
+                  SliverFillRemaining(child: _buildError())
+                else if (FavouritesProvider.instance.isLoading &&
+                    _showFavourites)
+                  const SliverFillRemaining(
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_showFavourites &&
+                    FavouritesProvider.instance.favouriteFiles.isEmpty)
+                  SliverFillRemaining(child: _buildEmptyFavourites())
+                else if (!_showFavourites &&
+                    _displayFolders.isEmpty &&
+                    _displayFiles.isEmpty)
+                  SliverFillRemaining(child: _buildEmpty())
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 16,
+                      bottom: 80,
+                    ),
+                    sliver: _buildContent(),
+                  ),
+              ],
+            ),
+            _buildBottomActionBar(),
           ],
         ),
         floatingActionButton: _buildFABs(),
@@ -846,113 +1094,282 @@ class HomePageState extends State<HomePage> {
   }
 
   Widget _buildFABs() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 56,
-          height: 56,
-          child: FloatingActionButton(
-            heroTag: 'upload_fab',
-            onPressed: _openUploadPage,
-            backgroundColor: Colors.blue,
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: FloatingActionButton(
+        heroTag: 'upload_fab',
+        onPressed: _openUploadPage,
+        backgroundColor: Colors.blue,
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Icon(
+          Icons.cloud_upload_rounded,
+          color: Colors.white,
+          size: 26,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionItem({
+    required IconData icon,
+    required String label,
+    required Color iconColor,
+    required Color textColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: textColor,
+              fontWeight: FontWeight.w500,
             ),
-            child: const Icon(
-              Icons.cloud_upload_rounded,
-              color: Colors.white,
-              size: 26,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomActionBar() {
+    final allSelected = _selectedFiles.length == _files.length &&
+        _selectedFolders.length == _folders.length &&
+        (_files.isNotEmpty || _folders.isNotEmpty);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutExpo,
+      bottom: _isSelectionMode ? 100 : -160,
+      left: 20,
+      right: 20,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.black.withOpacity(0.60)
+                  : Colors.white.withOpacity(0.70),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withOpacity(0.12)
+                    : Colors.white.withOpacity(0.80),
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 32,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.only(left: 8, right: 8, top: 10, bottom: 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Row 1: Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.close, color: textColor, size: 24),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () {
+                          setState(() {
+                            _selectedFiles.clear();
+                            _selectedFolders.clear();
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Выбрано: ${_selectedFiles.length + _selectedFolders.length}',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            if (allSelected) {
+                              _selectedFiles.clear();
+                              _selectedFolders.clear();
+                            } else {
+                              _selectedFiles.addAll(_files.map((f) => f.id));
+                              _selectedFolders.addAll(_folders.map((f) => f.id));
+                            }
+                          });
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          allSelected ? 'Снять все' : 'Все',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.10),
+                ),
+                const SizedBox(height: 8),
+                // Row 2: Actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Favourite
+                    _buildActionItem(
+                      icon: Icons.star_rounded,
+                      label: 'Избранное',
+                      iconColor: textColor,
+                      textColor: textColor,
+                      onTap: () {
+                        for (var f in _files.where((e) => _selectedFiles.contains(e.id))) {
+                          FavouritesProvider.instance.toggleFavourite(f);
+                        }
+                        setState(() {
+                          _selectedFiles.clear();
+                          _selectedFolders.clear();
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Добавлено в избранное')),
+                        );
+                      },
+                    ),
+                    // Download
+                    _buildActionItem(
+                      icon: Icons.download_rounded,
+                      label: 'Скачать',
+                      iconColor: textColor,
+                      textColor: textColor,
+                      onTap: () {
+                        for (var id in _selectedFiles) {
+                          final f = _files.firstWhere((e) => e.id == id);
+                          _startDownload(f);
+                        }
+                        setState(() {
+                          _selectedFiles.clear();
+                          _selectedFolders.clear();
+                        });
+                      },
+                    ),
+                    // Move
+                    _buildActionItem(
+                      icon: Icons.drive_file_move_rounded,
+                      label: 'Переместить',
+                      iconColor: textColor,
+                      textColor: textColor,
+                      onTap: () async {
+                        final result = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MoveDestinationScreen(
+                              selectedFiles: _selectedFiles.toList(),
+                              selectedFolders: _selectedFolders.toList(),
+                              currentFolderId: _currentFolderId,
+                            ),
+                          ),
+                        );
+                        if (result == true) {
+                          setState(() {
+                            _selectedFiles.clear();
+                            _selectedFolders.clear();
+                          });
+                          _loadContent();
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Успешно перемещено'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                    // Delete
+                    _buildActionItem(
+                      icon: Icons.delete_rounded,
+                      label: 'Удалить',
+                      iconColor: Colors.red.shade400,
+                      textColor: textColor,
+                      onTap: () {
+                        _showDeleteConfirmDialog(
+                          itemName: '${_selectedFiles.length + _selectedFolders.length} элементов',
+                          onConfirm: () async {
+                            setState(() => _isLoading = true);
+                            try {
+                              await HomeRepository().deleteItems(
+                                files: _selectedFiles.toList(),
+                                folders: _selectedFolders.toList(),
+                              );
+                              setState(() {
+                                _selectedFiles.clear();
+                                _selectedFolders.clear();
+                              });
+                              _loadContent();
+                            } catch (e) {
+                              setState(() => _isLoading = false);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e.toString()),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 56,
-          height: 56,
-          child: FloatingActionButton(
-            heroTag: 'create_fab',
-            onPressed: _showCreateFolderDialog,
-            backgroundColor: Colors.blue,
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildAppBar() {
-    if (_isSelectionMode) {
-      return SliverAppBar(
-        floating: false,
-        pinned: true,
-        backgroundColor: Colors.white,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black87),
-          onPressed: () {
-            setState(() {
-              _isSelectionMode = false;
-              _selectedFiles.clear();
-              _selectedFolders.clear();
-            });
-          },
-        ),
-        title: Text(
-          '${_selectedFiles.length + _selectedFolders.length} выбрано',
-          style: const TextStyle(
-            color: Colors.black87,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          if (_selectedFiles.isNotEmpty || _selectedFolders.isNotEmpty)
-            TextButton.icon(
-              icon: const Icon(
-                Icons.drive_file_move_rounded,
-                color: Colors.blue,
-              ),
-              label: const Text(
-                'Переместить',
-                style: TextStyle(color: Colors.blue),
-              ),
-              onPressed: () async {
-                final result = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => MoveDestinationScreen(
-                      selectedFiles: _selectedFiles.toList(),
-                      selectedFolders: _selectedFolders.toList(),
-                      initialFolderId: _currentFolderId,
-                    ),
-                  ),
-                );
-
-                if (result == true) {
-                  setState(() {
-                    _isSelectionMode = false;
-                    _selectedFiles.clear();
-                    _selectedFolders.clear();
-                  });
-                  _loadContent(); // Refresh to see that files are gone
-                }
-              },
-            ),
-          const SizedBox(width: 8),
-        ],
-      );
-    }
-
     return SliverAppBar(
       expandedHeight: 120,
       floating: false,
       pinned: true,
+      automaticallyImplyLeading: false,
       backgroundColor: Colors.white,
       elevation: 0,
       flexibleSpace: FlexibleSpaceBar(
@@ -1142,67 +1559,101 @@ class HomePageState extends State<HomePage> {
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.cloud_done, color: Colors.white, size: 32),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'My Cloud Storage',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                Text(
-                  '${_folders.length} папок · ${_files.length} файлов · всего $total',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (favCount > 0)
-            GestureDetector(
-              onTap: () => setState(() {
-                _showFavourites = !_showFavourites;
-                _activeFilter = _FilterType.all;
-              }),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
+          Row(
+            children: [
+              const Icon(Icons.cloud_done, color: Colors.white, size: 32),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      color: Colors.amber,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$favCount',
-                      style: const TextStyle(
+                    const Text(
+                      'My Cloud Storage',
+                      style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      '${_folders.length} папок · ${_files.length} файлов · всего $total',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 12,
                       ),
                     ),
                   ],
                 ),
               ),
+              if (favCount > 0)
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _showFavourites = !_showFavourites;
+                    _activeFilter = _FilterType.all;
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$favCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (_storageData.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.cloud_outlined, color: Colors.white, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  '${_fmt(_storageData['used_storage'])} из ${_fmt(_storageData['storage_limit'])}',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: ((_storageData['percent_used'] as num?)?.toDouble() ?? 0) / 100.0,
+                      minHeight: 4,
+                      backgroundColor: Colors.white.withValues(alpha: 0.25),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ],
         ],
       ),
     );
@@ -1333,10 +1784,49 @@ class HomePageState extends State<HomePage> {
             'Папки',
             Icons.folder_rounded,
             _displayFolders.length,
+            trailing: IconButton(
+              icon: const Icon(
+                Icons.create_new_folder_outlined,
+                color: Colors.blue,
+                size: 24,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: _showCreateFolderDialog,
+            ),
           ),
+          // Pinned folders row (between header and grid/list)
+          if (!_showFavourites && _pinnedFolders.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildPinnedFolders(),
+          ],
           const SizedBox(height: 8),
           _isGrid ? _buildFoldersGrid() : _buildFoldersList(),
           const SizedBox(height: 20),
+        ],
+        // If folders are empty, still show the + button in a standalone header
+        if (_displayFolders.isEmpty && !_showFavourites) ...[
+          Row(
+            children: [
+              const Spacer(),
+              IconButton(
+                icon: const Icon(
+                  Icons.create_new_folder_outlined,
+                  color: Colors.blue,
+                  size: 24,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: _showCreateFolderDialog,
+              ),
+            ],
+          ),
+          // Pinned folders row even when no folders yet
+          if (!_showFavourites && _pinnedFolders.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildPinnedFolders(),
+          ],
+          const SizedBox(height: 8),
         ],
         if (_displayFiles.isNotEmpty) ...[
           if (!_showFavourites)
@@ -1346,12 +1836,110 @@ class HomePageState extends State<HomePage> {
               _displayFiles.length,
             ),
           const SizedBox(height: 8),
-          ..._displayFiles.map(
-            (f) => _FileTile(
+          if (_isGrid && !_showFavourites)
+            _buildFilesGrid()
+          else
+            _buildFilesList(),
+        ],
+      ]),
+    );
+  }
+
+  Widget _buildPinnedFolders() {
+    if (_pinnedFolders.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 44,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _pinnedFolders.length,
+        itemBuilder: (context, index) {
+          final pin = _pinnedFolders[index];
+          final folder = pin['folder'] as FolderModel;
+          final pinId = pin['pinId'] as String;
+          return GestureDetector(
+            onTap: () => _openFolder(folder),
+            onLongPress: () {
+              showDialog(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Открепить папку?'),
+                  content: Text(folder.name),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Отмена'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _unpinFolder(pinId);
+                      },
+                      child: const Text('Открепить',
+                        style: TextStyle(color: Colors.red)),
+                    ),
+                  ],
+                ),
+              );
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.push_pin, size: 14, color: Colors.blue),
+                  const SizedBox(width: 4),
+                  Text(
+                    folder.name,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFilesGrid() {
+    final totalFiles = _displayFiles.length;
+    final maxPage = totalFiles == 0 ? 0 : ((totalFiles - 1) / 4).floor();
+    if (_filePage > maxPage) _filePage = maxPage;
+    if (_filePage < 0) _filePage = 0;
+    
+    final start = _filePage * 4;
+    final end = (start + 4) > totalFiles ? totalFiles : start + 4;
+    final pageFiles = _displayFiles.sublist(start, end);
+
+    return Column(
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.85,
+          ),
+          itemCount: pageFiles.length,
+          itemBuilder: (_, i) {
+            final f = pageFiles[i];
+            return _FileGridCard(
               file: f,
               isSelected: _selectedFiles.contains(f.id),
               isSelectionMode: _isSelectionMode,
-              authToken: _authToken,
               previewUrl: _previewUrls[f.id],
               onTap: () {
                 if (_isSelectionMode) {
@@ -1360,27 +1948,72 @@ class HomePageState extends State<HomePage> {
                   _openFileViewer(f);
                 }
               },
-              onLongPress: () {
-                if (!_isSelectionMode) {
-                  setState(() {
-                    _isSelectionMode = true;
-                    _selectedFiles.add(f.id);
-                  });
-                }
-              },
+              onSelectTap: () => _toggleFileSelection(f.id),
               onMenuTap: () => _showFileMenu(f),
-              downloadProgress: _downloadProgress[f.id],
-              downloadReceivedBytes: _downloadReceivedBytes[f.id],
-              onFavouriteTap: () =>
-                  FavouritesProvider.instance.toggleFavourite(f),
+              onFavouriteTap: () => FavouritesProvider.instance.toggleFavourite(f),
+            );
+          },
+        ),
+        if (totalFiles > 4)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildPaginationRow(
+              page: _filePage,
+              isLastPage: (_filePage + 1) * 4 >= totalFiles,
+              onPageChanged: (newPage) => setState(() => _filePage = newPage),
             ),
           ),
-        ],
-      ]),
+      ],
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon, int count) {
+  Widget _buildFilesList() {
+    final totalFiles = _displayFiles.length;
+    final maxPage = totalFiles == 0 ? 0 : ((totalFiles - 1) / 4).floor();
+    if (_filePage > maxPage) _filePage = maxPage;
+    if (_filePage < 0) _filePage = 0;
+    
+    final start = _filePage * 4;
+    final end = (start + 4) > totalFiles ? totalFiles : start + 4;
+    final pageFiles = _displayFiles.sublist(start, end);
+
+    return Column(
+      children: [
+        ...pageFiles.map(
+          (f) => _FileTile(
+            file: f,
+            isSelected: _selectedFiles.contains(f.id),
+            isSelectionMode: _isSelectionMode,
+            authToken: _authToken,
+            previewUrl: _previewUrls[f.id],
+            onTap: () {
+              if (_isSelectionMode) {
+                _toggleFileSelection(f.id);
+              } else {
+                _openFileViewer(f);
+              }
+            },
+            onSelectTap: () => _toggleFileSelection(f.id),
+            onMenuTap: () => _showFileMenu(f),
+            downloadProgress: _downloadProgress[f.id],
+            downloadReceivedBytes: _downloadReceivedBytes[f.id],
+            onFavouriteTap: () => FavouritesProvider.instance.toggleFavourite(f),
+          ),
+        ),
+        if (totalFiles > 4)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 16),
+            child: _buildPaginationRow(
+              page: _filePage,
+              isLastPage: (_filePage + 1) * 4 >= totalFiles,
+              onPageChanged: (newPage) => setState(() => _filePage = newPage),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, int count, {Widget? trailing}) {
     return Row(
       children: [
         Icon(icon, size: 18, color: Colors.grey[600]),
@@ -1409,72 +2042,105 @@ class HomePageState extends State<HomePage> {
             ),
           ),
         ),
+        if (trailing != null) ...[
+          const Spacer(),
+          trailing,
+        ],
       ],
     );
   }
 
   Widget _buildFoldersGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
-      itemCount: _displayFolders.length,
-      itemBuilder: (_, i) => _FolderCard(
-        folder: _displayFolders[i],
-        isSelected: _selectedFolders.contains(_displayFolders[i].id),
-        isSelectionMode: _isSelectionMode,
-        onTap: () {
-          if (_isSelectionMode) {
-            _toggleFolderSelection(_displayFolders[i].id);
-          } else {
-            _openFolder(_displayFolders[i]);
-          }
-        },
-        onLongPress: () {
-          if (!_isSelectionMode) {
-            setState(() {
-              _isSelectionMode = true;
-              _selectedFolders.add(_displayFolders[i].id);
-            });
-          }
-        },
-        onMenuTap: () => _showFolderMenu(_displayFolders[i]),
-      ),
+    final totalFolders = _displayFolders.length;
+    final maxPage = totalFolders == 0 ? 0 : ((totalFolders - 1) / 4).floor();
+    if (_folderPage > maxPage) _folderPage = maxPage;
+    if (_folderPage < 0) _folderPage = 0;
+    
+    final start = _folderPage * 4;
+    final end = (start + 4) > totalFolders ? totalFolders : start + 4;
+    final pageFolders = _displayFolders.sublist(start, end);
+
+    return Column(
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.3,
+          ),
+          itemCount: pageFolders.length,
+          itemBuilder: (_, i) {
+            final folder = pageFolders[i];
+            return _FolderCard(
+              folder: folder,
+              isSelected: _selectedFolders.contains(folder.id),
+              isSelectionMode: _isSelectionMode,
+              onTap: () {
+                if (_isSelectionMode) {
+                  _toggleFolderSelection(folder.id);
+                } else {
+                  _openFolder(folder);
+                }
+              },
+              onSelectTap: () => _toggleFolderSelection(folder.id),
+              onMenuTap: () => _showFolderMenu(folder),
+            );
+          },
+        ),
+        if (totalFolders > 4)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildPaginationRow(
+              page: _folderPage,
+              isLastPage: (_folderPage + 1) * 4 >= totalFolders,
+              onPageChanged: (newPage) => setState(() => _folderPage = newPage),
+            ),
+          ),
+      ],
     );
   }
 
   Widget _buildFoldersList() {
+    final totalFolders = _displayFolders.length;
+    final maxPage = totalFolders == 0 ? 0 : ((totalFolders - 1) / 4).floor();
+    if (_folderPage > maxPage) _folderPage = maxPage;
+    if (_folderPage < 0) _folderPage = 0;
+    
+    final start = _folderPage * 4;
+    final end = (start + 4) > totalFolders ? totalFolders : start + 4;
+    final pageFolders = _displayFolders.sublist(start, end);
+
     return Column(
-      children: _displayFolders
-          .map(
-            (f) => _FolderListTile(
-              folder: f,
-              isSelected: _selectedFolders.contains(f.id),
-              isSelectionMode: _isSelectionMode,
-              onTap: () {
-                if (_isSelectionMode) {
-                  _toggleFolderSelection(f.id);
-                } else {
-                  _openFolder(f);
-                }
-              },
-              onLongPress: () {
-                if (!_isSelectionMode) {
-                  setState(() {
-                    _isSelectionMode = true;
-                    _selectedFolders.add(f.id);
-                  });
-                }
-              },
-              onMenuTap: () => _showFolderMenu(f),
+      children: [
+        ...pageFolders.map(
+          (f) => _FolderListTile(
+            folder: f,
+            isSelected: _selectedFolders.contains(f.id),
+            isSelectionMode: _isSelectionMode,
+            onTap: () {
+              if (_isSelectionMode) {
+                _toggleFolderSelection(f.id);
+              } else {
+                _openFolder(f);
+              }
+            },
+            onSelectTap: () => _toggleFolderSelection(f.id),
+            onMenuTap: () => _showFolderMenu(f),
+          ),
+        ),
+        if (totalFolders > 4)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildPaginationRow(
+              page: _folderPage,
+              isLastPage: (_folderPage + 1) * 4 >= totalFolders,
+              onPageChanged: (newPage) => setState(() => _folderPage = newPage),
             ),
-          )
-          .toList(),
+          ),
+      ],
     );
   }
 
@@ -1636,7 +2302,7 @@ class _FolderCard extends StatelessWidget {
   final bool isSelected;
   final bool isSelectionMode;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback onSelectTap;
   final VoidCallback onMenuTap;
 
   const _FolderCard({
@@ -1644,19 +2310,22 @@ class _FolderCard extends StatelessWidget {
     required this.isSelected,
     required this.isSelectionMode,
     required this.onTap,
-    required this.onLongPress,
+    required this.onSelectTap,
     required this.onMenuTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
+      onTap: isSelectionMode ? onSelectTap : onTap,
+      onLongPress: onSelectTap,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isSelected
+              ? Colors.blue.withValues(alpha: 0.08)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: isSelected ? Border.all(color: Colors.blue, width: 2) : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
@@ -1671,43 +2340,53 @@ class _FolderCard extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.folder_rounded,
-                    color: Colors.amber,
-                    size: 22,
-                  ),
-                ),
-                if (isSelectionMode)
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? Colors.blue : Colors.grey[300]!,
-                        width: 2,
+                Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.folder_rounded,
+                        color: Colors.amber,
+                        size: 22,
                       ),
                     ),
-                    child: isSelected
-                        ? const Icon(Icons.check, size: 16, color: Colors.white)
-                        : null,
-                  )
-                else
+                    if (isSelected)
+                      Positioned(
+                        top: -6,
+                        left: -6,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (!isSelectionMode)
                   SizedBox(
                     width: 28,
                     height: 28,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      iconSize: 18,
+                      iconSize: 22,
                       icon: const Icon(Icons.more_vert, color: Colors.grey),
                       onPressed: onMenuTap,
                     ),
@@ -1719,7 +2398,7 @@ class _FolderCard extends StatelessWidget {
               folder.name,
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                fontSize: 13,
+                fontSize: 14,
                 color: Colors.black87,
               ),
               maxLines: 2,
@@ -1738,7 +2417,7 @@ class _FolderListTile extends StatelessWidget {
   final bool isSelected;
   final bool isSelectionMode;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback onSelectTap;
   final VoidCallback onMenuTap;
 
   const _FolderListTile({
@@ -1746,7 +2425,7 @@ class _FolderListTile extends StatelessWidget {
     required this.isSelected,
     required this.isSelectionMode,
     required this.onTap,
-    required this.onLongPress,
+    required this.onSelectTap,
     required this.onMenuTap,
   });
 
@@ -1754,43 +2433,69 @@ class _FolderListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isSelected ? Colors.blue.withValues(alpha: 0.08) : Colors.white,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
-      child: ListTile(
-        leading: isSelectionMode
-            ? Checkbox(
-                value: isSelected,
-                onChanged: (_) => onTap(),
-                shape: const CircleBorder(),
-                activeColor: Colors.blue,
-              )
-            : Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.folder_rounded,
-                  color: Colors.amber,
-                  size: 22,
-                ),
-              ),
-        title: Text(
-          folder.name,
-          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+      child: Container(
+        decoration: BoxDecoration(
+          border: isSelected
+              ? const Border(left: BorderSide(color: Colors.blue, width: 3))
+              : null,
         ),
-        trailing: isSelectionMode
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
-                onPressed: onMenuTap,
-              ),
-        onTap: onTap,
-        onLongPress: onLongPress,
+        child: ListTile(
+          onTap: isSelectionMode ? onSelectTap : onTap,
+          onLongPress: onSelectTap,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
+          leading: isSelectionMode
+              ? InkWell(
+                  onTap: onSelectTap,
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => onSelectTap(),
+                    shape: const CircleBorder(),
+                    activeColor: Colors.blue,
+                  ),
+                )
+              : Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.folder_rounded,
+                    color: Colors.amber,
+                    size: 22,
+                  ),
+                ),
+          title: Text(
+            folder.name,
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+          ),
+          trailing: isSelectionMode
+              ? null
+              : IconButton(
+                  icon: const Icon(
+                    Icons.more_vert,
+                    color: Colors.grey,
+                    size: 22,
+                  ),
+                  onPressed: onMenuTap,
+                ),
+        ),
       ),
     );
   }
@@ -1808,7 +2513,7 @@ class _FileTile extends StatelessWidget {
   final String? authToken;
   final String? previewUrl;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
+  final VoidCallback? onSelectTap;
 
   const _FileTile({
     required this.file,
@@ -1821,7 +2526,7 @@ class _FileTile extends StatelessWidget {
     this.authToken,
     this.previewUrl,
     this.onTap,
-    this.onLongPress,
+    this.onSelectTap,
   });
 
   bool get _isDownloading => downloadProgress != null;
@@ -1840,21 +2545,44 @@ class _FileTile extends StatelessWidget {
 
   Widget _buildLeading(Color color) {
     final mime = file.mimeType.toLowerCase();
-    // Image preview via MinIO preview URL
-    if (mime.startsWith('image/') && previewUrl != null) {
+    final thumb = file.thumbnailPath;
+    // Any file with a thumbnail — show it
+    if (thumb != null && thumb.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: CachedNetworkImage(
-          imageUrl: previewUrl!,
+        child: SizedBox(
           width: 42,
           height: 42,
-          fit: BoxFit.cover,
-          placeholder: (_, __) => _iconBox(color),
-          errorWidget: (_, __, ___) => _iconBox(color),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: thumb,
+                fit: BoxFit.cover,
+                placeholder: (_, __) => _iconBox(color),
+                errorWidget: (_, __, ___) => _iconBox(color),
+              ),
+              if (mime.startsWith('video/'))
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    child: const Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 10,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       );
     }
-    // Video — icon with play badge
+    // Video without thumbnail — icon with play badge
     if (mime.startsWith('video/')) {
       return Container(
         width: 42,
@@ -1907,7 +2635,7 @@ class _FileTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isSelected ? Colors.blue.withValues(alpha: 0.08) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -1917,106 +2645,317 @@ class _FileTile extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            onTap: onTap,
-            onLongPress: onLongPress,
-            leading: isSelectionMode
-                ? Checkbox(
-                    value: isSelected,
-                    onChanged: (_) => onTap?.call(),
-                    shape: const CircleBorder(),
-                    activeColor: Colors.blue,
-                  )
-                : _isDownloading
-                ? SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: Stack(
-                      alignment: Alignment.center,
+      child: Container(
+        decoration: BoxDecoration(
+          border: isSelected
+              ? const Border(left: BorderSide(color: Colors.blue, width: 3))
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              onTap: isSelectionMode ? onSelectTap : onTap,
+              onLongPress: onSelectTap,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 4,
+              ),
+              leading: isSelectionMode
+                  ? InkWell(
+                      onTap: onSelectTap,
+                      child: Checkbox(
+                        value: isSelected,
+                        onChanged: (_) => onSelectTap?.call(),
+                        shape: const CircleBorder(),
+                        activeColor: Colors.blue,
+                      ),
+                    )
+                  : _isDownloading
+                  ? SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: downloadProgress,
+                            strokeWidth: 3,
+                            backgroundColor: Colors.grey[200],
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF1A73E8),
+                            ),
+                          ),
+                          Text(
+                            '${((downloadProgress ?? 0) * 100).toInt()}%',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A73E8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _buildLeading(color),
+              title: Text(
+                file.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 15,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: _isDownloading
+                  ? Text(
+                      '${DownloadRepository.formatBytes(downloadReceivedBytes ?? 0)} / ${file.formattedSize}',
+                      style: const TextStyle(
+                        color: Color(0xFF1A73E8),
+                        fontSize: 12,
+                      ),
+                    )
+                  : Text(
+                      file.formattedSize,
+                      style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    ),
+              trailing: isSelectionMode
+                  ? null
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(
-                          value: downloadProgress,
-                          strokeWidth: 3,
-                          backgroundColor: Colors.grey[200],
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            Color(0xFF1A73E8),
+                        GestureDetector(
+                          onTap: onFavouriteTap,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Icon(
+                              file.isFavourite
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: file.isFavourite
+                                  ? Colors.amber
+                                  : Colors.grey,
+                              size: 22,
+                            ),
                           ),
                         ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.more_vert,
+                            color: Colors.grey,
+                            size: 22,
+                          ),
+                          onPressed: onMenuTap,
+                        ),
+                      ],
+                    ),
+            ),
+            if (_isDownloading)
+              LinearProgressIndicator(
+                value: downloadProgress,
+                minHeight: 3,
+                backgroundColor: Colors.grey[200],
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  Color(0xFF1A73E8),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── File Grid Card ────────────────────────────────────────────────────────
+class _FileGridCard extends StatelessWidget {
+  final FileModel file;
+  final bool isSelected;
+  final bool isSelectionMode;
+  final String? previewUrl;
+  final VoidCallback onTap;
+  final VoidCallback onSelectTap;
+  final VoidCallback onMenuTap;
+  final VoidCallback onFavouriteTap;
+
+  const _FileGridCard({
+    required this.file,
+    required this.isSelected,
+    required this.isSelectionMode,
+    required this.onTap,
+    required this.onSelectTap,
+    required this.onMenuTap,
+    required this.onFavouriteTap,
+    this.previewUrl,
+  });
+
+  IconData _icon(String mime) {
+    if (mime.startsWith('image/')) return Icons.image_rounded;
+    if (mime.startsWith('video/')) return Icons.videocam_rounded;
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Color _color(String mime) {
+    if (mime.startsWith('image/')) return const Color(0xFF34A853);
+    if (mime.startsWith('video/')) return const Color(0xFFEA4335);
+    return const Color(0xFF1A73E8);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mime = file.mimeType.toLowerCase();
+    final color = _color(mime);
+    final thumb = file.thumbnailPath;
+    final hasPreview = thumb != null && thumb.isNotEmpty;
+
+    return GestureDetector(
+      onTap: isSelectionMode ? onSelectTap : onTap,
+      onLongPress: onSelectTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.blue.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: isSelected ? Border.all(color: Colors.blue, width: 2) : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Thumbnail area
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: hasPreview
+                        ? CachedNetworkImage(
+                            imageUrl: thumb,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              color: color.withValues(alpha: 0.08),
+                              child: Icon(_icon(mime), color: color, size: 40),
+                            ),
+                            errorWidget: (_, __, ___) => Container(
+                              color: color.withValues(alpha: 0.08),
+                              child: Icon(_icon(mime), color: color, size: 40),
+                            ),
+                          )
+                        : Container(
+                            color: color.withValues(alpha: 0.08),
+                            child: Center(
+                              child: Icon(_icon(mime), color: color, size: 40),
+                            ),
+                          ),
+                  ),
+                  // Video play overlay
+                  if (mime.startsWith('video/') && hasPreview)
+                    Center(
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  // Selection check
+                  if (isSelected)
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  // ★ star icon
+                  if (!isSelectionMode)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: onFavouriteTap,
+                        child: Icon(
+                          file.isFavourite ? Icons.star : Icons.star_border,
+                          color: file.isFavourite ? Colors.amber : Colors.grey,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Info row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          '${((downloadProgress ?? 0) * 100).toInt()}%',
+                          file.name,
                           style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1A73E8),
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          file.formattedSize,
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 11,
                           ),
                         ),
                       ],
                     ),
-                  )
-                : _buildLeading(color),
-            title: Text(
-              file.name,
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: _isDownloading
-                ? Text(
-                    '${DownloadRepository.formatBytes(downloadReceivedBytes ?? 0)} / ${file.formattedSize}',
-                    style: const TextStyle(
-                      color: Color(0xFF1A73E8),
-                      fontSize: 12,
-                    ),
-                  )
-                : Text(
-                    file.formattedSize,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
-            trailing: isSelectionMode
-                ? null
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () =>
-                            FavouritesProvider.instance.toggleFavourite(file),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            file.isFavourite
-                                ? Icons.star_rounded
-                                : Icons.star_border_rounded,
-                            color: file.isFavourite
-                                ? Colors.amber
-                                : Colors.grey[400],
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.more_vert,
-                          color: Colors.grey,
-                          size: 20,
-                        ),
+                  if (!isSelectionMode)
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        iconSize: 20,
+                        icon: const Icon(Icons.more_vert, color: Colors.grey),
                         onPressed: onMenuTap,
                       ),
-                    ],
-                  ),
-          ),
-          if (_isDownloading)
-            LinearProgressIndicator(
-              value: downloadProgress,
-              minHeight: 3,
-              backgroundColor: Colors.grey[200],
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                Color(0xFF1A73E8),
+                    ),
+                ],
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }

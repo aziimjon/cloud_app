@@ -6,13 +6,13 @@ import 'package:cloud_app/core/errors/app_exception.dart';
 class MoveDestinationScreen extends StatefulWidget {
   final List<String> selectedFiles;
   final List<String> selectedFolders;
-  final String? initialFolderId;
+  final String? currentFolderId;
 
   const MoveDestinationScreen({
     super.key,
     required this.selectedFiles,
     required this.selectedFolders,
-    this.initialFolderId,
+    this.currentFolderId,
   });
 
   @override
@@ -47,10 +47,16 @@ class _MoveDestinationScreenState extends State<MoveDestinationScreen> {
       final response = await _repo.getContent(parentId: _currentFolderId);
       final rawFolders = response['folders'] as List;
 
+      if (!mounted) return;
+
       setState(() {
-        _folders = rawFolders
-            .map((e) => FolderModel.fromJson(e as Map<String, dynamic>))
-            .toList();
+        if (rawFolders.isNotEmpty && rawFolders.first is FolderModel) {
+          _folders = rawFolders.cast<FolderModel>();
+        } else {
+          _folders = rawFolders
+              .map((e) => FolderModel.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
         _isLoading = false;
       });
     } catch (e) {
@@ -64,13 +70,7 @@ class _MoveDestinationScreenState extends State<MoveDestinationScreen> {
 
   void _navigateToFolder(FolderModel folder) {
     if (widget.selectedFolders.contains(folder.id)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Нельзя переместить папку саму в себя'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
+      return; // disabled
     }
 
     setState(() {
@@ -93,8 +93,7 @@ class _MoveDestinationScreenState extends State<MoveDestinationScreen> {
   }
 
   Future<void> _confirmMove() async {
-    // Cannot move to the exact same directory we came from (optional check)
-    if (_currentFolderId == widget.initialFolderId) {
+    if (_currentFolderId == widget.currentFolderId) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Файлы уже находятся в этой папке')),
       );
@@ -111,13 +110,7 @@ class _MoveDestinationScreenState extends State<MoveDestinationScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Успешно перемещено'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pop(context, true); // true = success
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -143,7 +136,7 @@ class _MoveDestinationScreenState extends State<MoveDestinationScreen> {
           elevation: 1,
           leading: IconButton(
             icon: const Icon(Icons.close, color: Colors.black87),
-            onPressed: () => Navigator.pop(context, false), // false = cancelled
+            onPressed: () => Navigator.pop(context, false),
           ),
           actions: [
             if (!_isLoading && _error == null)
@@ -234,21 +227,22 @@ class _MoveDestinationScreenState extends State<MoveDestinationScreen> {
       itemCount: _folders.length,
       itemBuilder: (context, index) {
         final folder = _folders[index];
-        final isSelectedToMove = widget.selectedFolders.contains(folder.id);
+        final isDisabled = widget.selectedFolders.contains(folder.id);
 
         return ListTile(
+          enabled: !isDisabled,
           leading: Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: isSelectedToMove
+              color: isDisabled
                   ? Colors.grey.withValues(alpha: 0.1)
                   : Colors.amber.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               Icons.folder_rounded,
-              color: isSelectedToMove ? Colors.grey : Colors.amber,
+              color: isDisabled ? Colors.grey : Colors.amber,
               size: 22,
             ),
           ),
@@ -256,7 +250,7 @@ class _MoveDestinationScreenState extends State<MoveDestinationScreen> {
             folder.name,
             style: TextStyle(
               fontWeight: FontWeight.w500,
-              color: isSelectedToMove ? Colors.grey : Colors.black87,
+              color: isDisabled ? Colors.grey : Colors.black87,
             ),
           ),
           trailing: const Icon(Icons.chevron_right, color: Colors.grey),
