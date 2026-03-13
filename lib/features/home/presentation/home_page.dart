@@ -13,6 +13,7 @@ import 'photo_viewer_page.dart';
 import 'video_player_page.dart';
 import '../../../core/providers/favourites_provider.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../../../main.dart';
 
 // ✅ Задача 5: только Все, Фото, Видео
 enum _FilterType { all, images, videos }
@@ -56,7 +57,6 @@ class HomePageState extends State<HomePage> {
 
   List<Map<String, dynamic>> _pinnedFolders = [];
   int _folderPage = 0;
-  int _filePage = 0;
 
   Widget _buildPaginationRow({
     required int page,
@@ -335,7 +335,6 @@ class HomePageState extends State<HomePage> {
       _showFavourites = false;
       _activeFilter = _FilterType.all;
       _folderPage = 0;
-      _filePage = 0;
     });
     widget.onFolderChanged?.call(folder.id);
     _loadContent();
@@ -347,7 +346,6 @@ class HomePageState extends State<HomePage> {
       setState(() {
         _breadcrumb.clear();
         _folderPage = 0;
-        _filePage = 0;
       });
       widget.onFolderChanged?.call(null);
     } else {
@@ -355,7 +353,6 @@ class HomePageState extends State<HomePage> {
       setState(() {
         _breadcrumb.removeRange(index + 1, _breadcrumb.length);
         _folderPage = 0;
-        _filePage = 0;
       });
       widget.onFolderChanged?.call(_breadcrumb[index].id);
     }
@@ -366,10 +363,12 @@ class HomePageState extends State<HomePage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.all(20),
         child: SafeArea(
@@ -382,7 +381,7 @@ class HomePageState extends State<HomePage> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: Theme.of(ctx).dividerColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -429,8 +428,9 @@ class HomePageState extends State<HomePage> {
               const SizedBox(height: 8),
             ],
           ),
-        ),
       ),
+    );
+      },
     );
   }
 
@@ -440,12 +440,14 @@ class HomePageState extends State<HomePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -478,10 +480,12 @@ class HomePageState extends State<HomePage> {
               TextField(
                 controller: controller,
                 autofocus: true,
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   hintText: 'Название папки',
+                  hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.4)),
                   filled: true,
-                  fillColor: Colors.grey[100],
+                  fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -554,7 +558,8 @@ class HomePageState extends State<HomePage> {
             ],
           ),
         ),
-      ),
+      );
+      },
     );
   }
 
@@ -564,6 +569,7 @@ class HomePageState extends State<HomePage> {
     required String title,
     required VoidCallback onTap,
   }) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20),
       minVerticalPadding: 0,
@@ -571,7 +577,7 @@ class HomePageState extends State<HomePage> {
       title: Text(
         title,
         style: TextStyle(
-          color: color == Colors.red ? Colors.red : Colors.black87,
+          color: color == Colors.red ? Colors.red : onSurface,
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),
@@ -585,10 +591,12 @@ class HomePageState extends State<HomePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.only(top: 12),
         child: SafeArea(
@@ -600,7 +608,7 @@ class HomePageState extends State<HomePage> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: Theme.of(ctx).dividerColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -620,9 +628,10 @@ class HomePageState extends State<HomePage> {
                     Expanded(
                       child: Text(
                         folder.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
+                          color: cs.onSurface,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -747,7 +756,8 @@ class HomePageState extends State<HomePage> {
             ],
           ),
         ),
-      ),
+      );
+      },
     );
   }
 
@@ -768,10 +778,12 @@ class HomePageState extends State<HomePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.only(top: 12),
         child: SafeArea(
@@ -783,7 +795,7 @@ class HomePageState extends State<HomePage> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: Theme.of(ctx).dividerColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -825,7 +837,7 @@ class HomePageState extends State<HomePage> {
                           Text(
                             file.formattedSize,
                             style: TextStyle(
-                              color: Colors.grey[500],
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                               fontSize: 13,
                             ),
                           ),
@@ -945,7 +957,8 @@ class HomePageState extends State<HomePage> {
             ],
           ),
         ),
-      ),
+      );
+      },
     );
   }
 
@@ -954,18 +967,22 @@ class HomePageState extends State<HomePage> {
     required Future<void> Function(String) onRename,
   }) {
     final controller = TextEditingController(text: currentName);
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Переименовать'),
+        backgroundColor: cs.surface,
+        title: Text('Переименовать', style: TextStyle(color: cs.onSurface)),
         content: TextField(
           controller: controller,
           autofocus: true,
+          style: TextStyle(color: cs.onSurface),
           decoration: InputDecoration(
             hintText: 'Новое название',
+            hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.4)),
             filled: true,
-            fillColor: Colors.grey[100],
+            fillColor: cs.surfaceContainerHighest,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -1011,13 +1028,16 @@ class HomePageState extends State<HomePage> {
     required String itemName,
     required Future<void> Function() onConfirm,
   }) {
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Удалить?'),
+        backgroundColor: cs.surface,
+        title: Text('Удалить?', style: TextStyle(color: cs.onSurface)),
         content: Text(
           'Вы уверены, что хотите удалить «$itemName»?\nЭто действие необратимо.',
+          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
@@ -1046,8 +1066,9 @@ class HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: FavouritesProvider.instance,
-      builder: (context, _) => Scaffold(
-        backgroundColor: const Color(0xFFF5F7FA),
+      builder: (context, _) {
+        return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Stack(
           children: [
             CustomScrollView(
@@ -1089,7 +1110,8 @@ class HomePageState extends State<HomePage> {
           ],
         ),
         floatingActionButton: _buildFABs(),
-      ),
+      );
+      },
     );
   }
 
@@ -1162,18 +1184,18 @@ class HomePageState extends State<HomePage> {
           child: Container(
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.black.withOpacity(0.60)
-                  : Colors.white.withOpacity(0.70),
+                  ? Colors.black.withValues(alpha: 0.60)
+                  : Colors.white.withValues(alpha: 0.70),
               borderRadius: BorderRadius.circular(28),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withOpacity(0.12)
-                    : Colors.white.withOpacity(0.80),
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.80),
                 width: 1.0,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.25),
+                  color: Colors.black.withValues(alpha: 0.25),
                   blurRadius: 32,
                   spreadRadius: -4,
                   offset: const Offset(0, 12),
@@ -1243,7 +1265,7 @@ class HomePageState extends State<HomePage> {
                 Divider(
                   height: 1,
                   thickness: 1,
-                  color: isDark ? Colors.white.withOpacity(0.10) : Colors.black.withOpacity(0.10),
+                  color: isDark ? Colors.white.withValues(alpha: 0.10) : Colors.black.withValues(alpha: 0.10),
                 ),
                 const SizedBox(height: 8),
                 // Row 2: Actions
@@ -1365,12 +1387,14 @@ class HomePageState extends State<HomePage> {
   }
 
   Widget _buildAppBar() {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SliverAppBar(
       expandedHeight: 120,
       floating: false,
       pinned: true,
       automaticallyImplyLeading: false,
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       elevation: 0,
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.only(left: 20, bottom: 12),
@@ -1381,7 +1405,7 @@ class HomePageState extends State<HomePage> {
             Text(
               'Welcome back,',
               style: TextStyle(
-                color: Colors.grey[500],
+                color: cs.onSurface.withValues(alpha: 0.5),
                 fontSize: 11,
                 fontWeight: FontWeight.normal,
               ),
@@ -1389,8 +1413,8 @@ class HomePageState extends State<HomePage> {
             const SizedBox(height: 2),
             Text(
               _userName ?? 'User',
-              style: const TextStyle(
-                color: Colors.black,
+              style: TextStyle(
+                color: cs.onSurface,
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
               ),
@@ -1399,13 +1423,23 @@ class HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        background: Container(color: Colors.white),
+        background: Container(color: cs.surface),
       ),
       actions: [
         IconButton(
           icon: Icon(
+            isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round,
+            color: cs.onSurface,
+          ),
+          onPressed: () {
+            ThemeNotifier.instance.toggle();
+          },
+          tooltip: 'Сменить тему',
+        ),
+        IconButton(
+          icon: Icon(
             _showFavourites ? Icons.star_rounded : Icons.star_border_rounded,
-            color: _showFavourites ? Colors.amber : Colors.black,
+            color: _showFavourites ? Colors.amber : cs.onSurface,
           ),
           onPressed: () => setState(() {
             _showFavourites = !_showFavourites;
@@ -1416,12 +1450,12 @@ class HomePageState extends State<HomePage> {
         IconButton(
           icon: Icon(
             _isGrid ? Icons.view_list : Icons.grid_view,
-            color: Colors.black,
+            color: cs.onSurface,
           ),
           onPressed: () => setState(() => _isGrid = !_isGrid),
         ),
         IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.black),
+          icon: Icon(Icons.refresh, color: cs.onSurface),
           onPressed: _loadContent,
         ),
         const SizedBox(width: 4),
@@ -1431,7 +1465,7 @@ class HomePageState extends State<HomePage> {
 
   Widget _buildBreadcrumb() {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -1452,7 +1486,7 @@ class HomePageState extends State<HomePage> {
                 ),
                 decoration: BoxDecoration(
                   color: _breadcrumb.isEmpty && !_showFavourites
-                      ? Colors.blue.withOpacity(0.1)
+                      ? Colors.blue.withValues(alpha: 0.1)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -1490,7 +1524,7 @@ class HomePageState extends State<HomePage> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.1),
+                  color: Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(
@@ -1708,12 +1742,12 @@ class HomePageState extends State<HomePage> {
             children: [
               const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
               const SizedBox(width: 6),
-              const Text(
+              Text(
                 'Избранное',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const SizedBox(width: 6),
@@ -1847,12 +1881,13 @@ class HomePageState extends State<HomePage> {
 
   Widget _buildPinnedFolders() {
     if (_pinnedFolders.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
     return SizedBox(
       height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         itemCount: _pinnedFolders.length,
         itemBuilder: (context, index) {
           final pin = _pinnedFolders[index];
@@ -1864,8 +1899,9 @@ class HomePageState extends State<HomePage> {
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
-                  title: const Text('Открепить папку?'),
-                  content: Text(folder.name),
+                  backgroundColor: cs.surface,
+                  title: Text('Открепить папку?', style: TextStyle(color: cs.onSurface)),
+                  content: Text(folder.name, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
@@ -1887,9 +1923,9 @@ class HomePageState extends State<HomePage> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.08),
+                color: Colors.blue.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1898,9 +1934,10 @@ class HomePageState extends State<HomePage> {
                   const SizedBox(width: 4),
                   Text(
                     folder.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
                     ),
                   ),
                 ],
@@ -1913,73 +1950,42 @@ class HomePageState extends State<HomePage> {
   }
 
   Widget _buildFilesGrid() {
-    final totalFiles = _displayFiles.length;
-    final maxPage = totalFiles == 0 ? 0 : ((totalFiles - 1) / 4).floor();
-    if (_filePage > maxPage) _filePage = maxPage;
-    if (_filePage < 0) _filePage = 0;
-    
-    final start = _filePage * 4;
-    final end = (start + 4) > totalFiles ? totalFiles : start + 4;
-    final pageFiles = _displayFiles.sublist(start, end);
-
-    return Column(
-      children: [
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.85,
-          ),
-          itemCount: pageFiles.length,
-          itemBuilder: (_, i) {
-            final f = pageFiles[i];
-            return _FileGridCard(
-              file: f,
-              isSelected: _selectedFiles.contains(f.id),
-              isSelectionMode: _isSelectionMode,
-              previewUrl: _previewUrls[f.id],
-              onTap: () {
-                if (_isSelectionMode) {
-                  _toggleFileSelection(f.id);
-                } else {
-                  _openFileViewer(f);
-                }
-              },
-              onSelectTap: () => _toggleFileSelection(f.id),
-              onMenuTap: () => _showFileMenu(f),
-              onFavouriteTap: () => FavouritesProvider.instance.toggleFavourite(f),
-            );
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: _displayFiles.length,
+      itemBuilder: (_, i) {
+        final f = _displayFiles[i];
+        return _FileGridCard(
+          file: f,
+          isSelected: _selectedFiles.contains(f.id),
+          isSelectionMode: _isSelectionMode,
+          previewUrl: _previewUrls[f.id],
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleFileSelection(f.id);
+            } else {
+              _openFileViewer(f);
+            }
           },
-        ),
-        if (totalFiles > 4)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _buildPaginationRow(
-              page: _filePage,
-              isLastPage: (_filePage + 1) * 4 >= totalFiles,
-              onPageChanged: (newPage) => setState(() => _filePage = newPage),
-            ),
-          ),
-      ],
+          onSelectTap: () => _toggleFileSelection(f.id),
+          onMenuTap: () => _showFileMenu(f),
+          onFavouriteTap: () => FavouritesProvider.instance.toggleFavourite(f),
+        );
+      },
     );
   }
 
   Widget _buildFilesList() {
-    final totalFiles = _displayFiles.length;
-    final maxPage = totalFiles == 0 ? 0 : ((totalFiles - 1) / 4).floor();
-    if (_filePage > maxPage) _filePage = maxPage;
-    if (_filePage < 0) _filePage = 0;
-    
-    final start = _filePage * 4;
-    final end = (start + 4) > totalFiles ? totalFiles : start + 4;
-    final pageFiles = _displayFiles.sublist(start, end);
-
     return Column(
       children: [
-        ...pageFiles.map(
+        ..._displayFiles.map(
           (f) => _FileTile(
             file: f,
             isSelected: _selectedFiles.contains(f.id),
@@ -2000,15 +2006,6 @@ class HomePageState extends State<HomePage> {
             onFavouriteTap: () => FavouritesProvider.instance.toggleFavourite(f),
           ),
         ),
-        if (totalFiles > 4)
-          Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 16),
-            child: _buildPaginationRow(
-              page: _filePage,
-              isLastPage: (_filePage + 1) * 4 >= totalFiles,
-              onPageChanged: (newPage) => setState(() => _filePage = newPage),
-            ),
-          ),
       ],
     );
   }
@@ -2016,14 +2013,14 @@ class HomePageState extends State<HomePage> {
   Widget _buildSectionHeader(String title, IconData icon, int count, {Widget? trailing}) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: Colors.grey[600]),
+        Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
         const SizedBox(width: 6),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 15,
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(width: 6),
@@ -2153,7 +2150,7 @@ class HomePageState extends State<HomePage> {
           const SizedBox(height: 16),
           Text(
             _error!,
-            style: TextStyle(color: Colors.grey[600]),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -2189,18 +2186,18 @@ class HomePageState extends State<HomePage> {
             child: const Icon(Icons.folder_open, size: 40, color: Colors.blue),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Здесь пока пусто',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Создайте папку или загрузите фото / видео',
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 13),
           ),
         ],
       ),
@@ -2226,18 +2223,18 @@ class HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Нет избранных файлов',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Нажмите ★ на файле чтобы добавить',
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 13),
           ),
         ],
       ),
@@ -2323,7 +2320,7 @@ class _FolderCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.blue.withValues(alpha: 0.08)
-              : Colors.white,
+              : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: isSelected ? Border.all(color: Colors.blue, width: 2) : null,
           boxShadow: [
@@ -2396,10 +2393,10 @@ class _FolderCard extends StatelessWidget {
             const Spacer(),
             Text(
               folder.name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
-                color: Colors.black87,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -2435,7 +2432,7 @@ class _FolderListTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: isSelected ? Colors.blue.withValues(alpha: 0.08) : Colors.white,
+        color: isSelected ? Colors.blue.withValues(alpha: 0.08) : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -2483,7 +2480,11 @@ class _FolderListTile extends StatelessWidget {
                 ),
           title: Text(
             folder.name,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 15,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           trailing: isSelectionMode
               ? null
@@ -2635,7 +2636,7 @@ class _FileTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: isSelected ? Colors.blue.withValues(alpha: 0.08) : Colors.white,
+        color: isSelected ? Colors.blue.withValues(alpha: 0.08) : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -2681,7 +2682,7 @@ class _FileTile extends StatelessWidget {
                           CircularProgressIndicator(
                             value: downloadProgress,
                             strokeWidth: 3,
-                            backgroundColor: Colors.grey[200],
+                            backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
                             valueColor: const AlwaysStoppedAnimation<Color>(
                               Color(0xFF1A73E8),
                             ),
@@ -2717,7 +2718,7 @@ class _FileTile extends StatelessWidget {
                     )
                   : Text(
                       file.formattedSize,
-                      style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 13),
                     ),
               trailing: isSelectionMode
                   ? null
@@ -2754,7 +2755,7 @@ class _FileTile extends StatelessWidget {
               LinearProgressIndicator(
                 value: downloadProgress,
                 minHeight: 3,
-                backgroundColor: Colors.grey[200],
+                backgroundColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
                 valueColor: const AlwaysStoppedAnimation<Color>(
                   Color(0xFF1A73E8),
                 ),
@@ -2814,7 +2815,7 @@ class _FileGridCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.blue.withValues(alpha: 0.08)
-              : Colors.white,
+              : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           border: isSelected ? Border.all(color: Colors.blue, width: 2) : null,
           boxShadow: [
@@ -2922,10 +2923,10 @@ class _FileGridCard extends StatelessWidget {
                       children: [
                         Text(
                           file.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w500,
                             fontSize: 13,
-                            color: Colors.black87,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -2933,7 +2934,7 @@ class _FileGridCard extends StatelessWidget {
                         Text(
                           file.formattedSize,
                           style: TextStyle(
-                            color: Colors.grey[500],
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                             fontSize: 11,
                           ),
                         ),

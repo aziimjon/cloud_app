@@ -74,9 +74,10 @@ class _MainPageState extends State<MainPage> {
   }
 
   Widget _buildBottomNav() {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -157,6 +158,9 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = index == current;
+    final inactiveColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF8B949E)
+        : Colors.grey[400];
     return GestureDetector(
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
@@ -176,7 +180,7 @@ class _NavItem extends StatelessWidget {
               ),
               child: Icon(
                 icon,
-                color: active ? const Color(0xFF1A73E8) : Colors.grey[400],
+                color: active ? const Color(0xFF1A73E8) : inactiveColor,
                 size: 22,
               ),
             ),
@@ -185,7 +189,7 @@ class _NavItem extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 10,
-                color: active ? const Color(0xFF1A73E8) : Colors.grey[400],
+                color: active ? const Color(0xFF1A73E8) : inactiveColor,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -409,18 +413,19 @@ class _RecentPageState extends State<_RecentPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: cs.surface,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Recent',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black),
+            icon: Icon(Icons.refresh, color: cs.onSurface),
             onPressed: _loadRecentFiles,
           ),
         ],
@@ -486,7 +491,7 @@ class _RecentPageState extends State<_RecentPage> {
                   final color = _color(file.mimeType);
                   return Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cs.surface,
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
@@ -505,9 +510,10 @@ class _RecentPageState extends State<_RecentPage> {
                       leading: _buildFileLeading(file, color),
                       title: Text(
                         file.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w500,
                           fontSize: 14,
+                          color: cs.onSurface,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -541,7 +547,7 @@ class _RecentPageState extends State<_RecentPage> {
                           Text(
                             file.formattedSize,
                             style: TextStyle(
-                              color: Colors.grey[500],
+                              color: cs.onSurface.withValues(alpha: 0.5),
                               fontSize: 12,
                             ),
                           ),
