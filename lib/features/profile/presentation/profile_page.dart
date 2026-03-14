@@ -157,7 +157,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 decoration: InputDecoration(
                   hintText: 'Новое имя',
                   filled: true,
-                  fillColor: Colors.grey[100],
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -245,7 +245,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 decoration: InputDecoration(
                   hintText: 'Новый номер',
                   filled: true,
-                  fillColor: Colors.grey[100],
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -433,7 +433,7 @@ class _ProfilePageState extends State<ProfilePage> {
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
-        fillColor: Colors.grey[100],
+        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -491,15 +491,9 @@ class _ProfilePageState extends State<ProfilePage> {
       leading: Text(flag, style: const TextStyle(fontSize: 24)),
       title: Text(label,
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
-      trailing: Radio<String>(
-        value: code,
-        groupValue: _lang,
-        activeColor: _accent,
-        onChanged: (v) {
-          setState(() => _lang = v ?? 'ru');
-          Navigator.pop(ctx);
-        },
-      ),
+      trailing: _lang == code
+          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF2563EB))
+          : const Icon(Icons.radio_button_unchecked, color: Colors.grey),
       onTap: () {
         setState(() => _lang = code);
         Navigator.pop(ctx);
@@ -526,7 +520,9 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: Theme.of(context).brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF5F7FA),
         body: _isLoading

@@ -18,13 +18,9 @@ class _FileItem {
   _FileItem({
     required this.file,
     required this.name,
-    // ignore: unused_element_parameter
     this.status = _FileStatus.waiting,
-    // ignore: unused_element_parameter
     this.progress = 0,
-    // ignore: unused_element_parameter
     this.error,
-    // ignore: unused_element_parameter
     this.cancelRequested = false,
   });
 }

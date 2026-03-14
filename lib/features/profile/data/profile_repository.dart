@@ -91,6 +91,12 @@ class ProfileRepository {
 
   Future<void> uploadAvatar(File imageFile) async {
     try {
+      // Сначала получаем ID пользователя
+      final me = await getMe();
+      final userId = me['id']?.toString();
+      if (userId == null) {
+        throw const AppException(message: 'Не удалось получить ID пользователя');
+      }
       final formData = FormData.fromMap({
         'image': await MultipartFile.fromFile(
           imageFile.path,
@@ -98,7 +104,7 @@ class ProfileRepository {
           contentType: DioMediaType('image', 'jpeg'),
         ),
       });
-      await _dio.patch('/authentication/users/me/', data: formData);
+      await _dio.patch('/authentication/users/$userId/', data: formData);
     } on DioException catch (e) {
       throw AppException(
         message: _extractError(e.response?.data),

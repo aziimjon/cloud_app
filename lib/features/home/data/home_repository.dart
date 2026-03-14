@@ -23,51 +23,45 @@ class HomeRepository {
     return data.toString();
   }
 
-  Future<Map<String, dynamic>> getContent({String? parentId}) async {
+  Future<Map<String, dynamic>> getContent({
+    String? parentId,
+    int page = 1,
+  }) async {
     try {
-      final List<dynamic> allResults = [];
-
       final String endpoint = parentId == null
           ? '/content/folder/'
           : '/content/folder/$parentId/';
-      var response = await _dio.get(endpoint);
+
+      final response = await _dio.get(
+        endpoint,
+        queryParameters: {'page': page},
+      );
+
       final dynamic responseData = response.data;
+      final List<dynamic> results = responseData is List
+          ? responseData
+          : (responseData['results'] ?? []);
 
-      if (responseData is List) {
-        allResults.addAll(responseData);
-      } else {
-        allResults.addAll(responseData['results'] ?? []);
-        String? nextUrl = responseData['next']?.toString();
-        while (nextUrl != null && nextUrl.isNotEmpty) {
-          final uri = Uri.parse(nextUrl);
-          final page = uri.queryParameters['page'];
-          if (page == null) break;
-          final pageResponse = await _dio.get(
-            endpoint,
-            queryParameters: {'page': page},
-          );
-          final pageData = pageResponse.data;
-          if (pageData is List) {
-            allResults.addAll(pageData);
-            break;
-          } else {
-            allResults.addAll(pageData['results'] ?? []);
-            nextUrl = pageData['next']?.toString();
-          }
-        }
-      }
+      final bool hasNext = responseData is Map &&
+          responseData['next'] != null &&
+          responseData['next'].toString().isNotEmpty;
 
-      final folders = allResults
+      final folders = results
           .where((e) => e['type'] == 'folder')
           .map((e) => FolderModel.fromJson(e))
           .toList();
 
-      final files = allResults
+      final files = results
           .where((e) => e['type'] == 'file')
           .map((e) => FileModel.fromJson(e))
           .toList();
 
-      return {'folders': folders, 'files': files, 'count': allResults.length};
+      return {
+        'folders': folders,
+        'files': files,
+        'hasNext': hasNext,
+        'count': results.length,
+      };
     } on DioException catch (e) {
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось загрузить файлы',
@@ -237,7 +231,7 @@ class HomeRepository {
       if (response.data is List) {
         raw = response.data as List;
       } else if (response.data is Map && response.data['results'] != null) {
-        raw = response.data['results'] as List;
+        raw = response.data['results'];
       }
       return raw.map((item) {
         final folder = FolderModel.fromJson(item['folder'] as Map<String, dynamic>);
@@ -263,7 +257,7 @@ class HomeRepository {
     } on DioException catch (e) {
       if (e.response?.statusCode == 400 && 
           e.response?.data?['message_key'] == 'you_can_pin_maximum_5_folders') {
-        throw AppException(message: 'Максимум 5 закреплённых папок');
+        throw const AppException(message: 'Максимум 5 закреплённых папок');
       }
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось закрепить папку',
@@ -321,7 +315,7 @@ class HomeRepository {
           : (response.data ?? []);
       if (raw is! List) return [];
       // Нормализуем id в String чтобы не было type cast errors
-      return (raw as List).map((item) {
+      return raw.map((item) {
         if (item is Map) {
           final normalized = Map<String, dynamic>.from(item);
           if (normalized['id'] != null) {

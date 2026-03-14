@@ -50,6 +50,12 @@ class HomePageState extends State<HomePage> {
   bool _showFavourites = false;
   _FilterType _activeFilter = _FilterType.all;
 
+  // Pagination
+  int _currentPage = 1;
+  bool _hasNextPage = false;
+  bool _isLoadingMore = false;
+  final ScrollController _scrollController = ScrollController();
+
   bool get _isSelectionMode =>
       _selectedFiles.isNotEmpty || _selectedFolders.isNotEmpty;
   final Set<String> _selectedFiles = {};
@@ -215,6 +221,20 @@ class HomePageState extends State<HomePage> {
     _loadContent();
     _loadAuthToken();
     _loadStorageData();
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 300) {
+        if (_hasNextPage && !_isLoadingMore && !_isLoading) {
+          _loadMoreContent();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAuthToken() async {
@@ -238,12 +258,14 @@ class HomePageState extends State<HomePage> {
     if (mime.startsWith('image/')) {
       final fullUrl = await _repo.getPreviewUrl(file.id);
       if (fullUrl == null) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Не удалось открыть изображение')),
           );
+        }
         return;
       }
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -254,12 +276,14 @@ class HomePageState extends State<HomePage> {
     } else if (mime.startsWith('video/')) {
       final url = await _repo.getPreviewUrl(file.id);
       if (url == null) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Не удалось открыть видео')),
           );
+        }
         return;
       }
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -274,9 +298,14 @@ class HomePageState extends State<HomePage> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _currentPage = 1;
+      _hasNextPage = false;
     });
     try {
-      final result = await _repo.getContent(parentId: _currentFolderId);
+      final result = await _repo.getContent(
+        parentId: _currentFolderId,
+        page: 1,
+      );
       // Load pinned folders
       List<Map<String, dynamic>> pinned = [];
       try {
@@ -286,6 +315,7 @@ class HomePageState extends State<HomePage> {
       setState(() {
         _folders = result['folders'] as List<FolderModel>;
         _files = result['files'] as List<FileModel>;
+        _hasNextPage = result['hasNext'] as bool;
         _pinnedFolders = pinned;
         _isLoading = false;
       });
@@ -297,6 +327,29 @@ class HomePageState extends State<HomePage> {
         _error = e.message;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadMoreContent() async {
+    if (!mounted || _isLoadingMore || !_hasNextPage) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final result = await _repo.getContent(
+        parentId: _currentFolderId,
+        page: _currentPage + 1,
+      );
+      if (!mounted) return;
+      final newFiles = result['files'] as List<FileModel>;
+      setState(() {
+        _files.addAll(newFiles);
+        _currentPage++;
+        _hasNextPage = result['hasNext'] as bool;
+        _isLoadingMore = false;
+      });
+      _loadPreviewUrls(newFiles);
+    } on AppException catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingMore = false);
     }
   }
 
@@ -1072,6 +1125,7 @@ class HomePageState extends State<HomePage> {
         body: Stack(
           children: [
             CustomScrollView(
+              controller: _scrollController,
               slivers: [
                 _buildAppBar(),
                 SliverToBoxAdapter(child: _buildBreadcrumb()),
@@ -1840,20 +1894,20 @@ class HomePageState extends State<HomePage> {
         ],
         // If folders are empty, still show the + button in a standalone header
         if (_displayFolders.isEmpty && !_showFavourites) ...[
-          Row(
-            children: [
-              const Spacer(),
-              IconButton(
-                icon: const Icon(
-                  Icons.create_new_folder_outlined,
-                  color: Colors.blue,
-                  size: 24,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: _showCreateFolderDialog,
+          _buildSectionHeader(
+            'Папки',
+            Icons.folder_rounded,
+            0,
+            trailing: IconButton(
+              icon: const Icon(
+                Icons.create_new_folder_outlined,
+                color: Colors.blue,
+                size: 24,
               ),
-            ],
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: _showCreateFolderDialog,
+            ),
           ),
           // Pinned folders row even when no folders yet
           if (!_showFavourites && _pinnedFolders.isNotEmpty) ...[
@@ -1875,6 +1929,11 @@ class HomePageState extends State<HomePage> {
           else
             _buildFilesList(),
         ],
+        if (_isLoadingMore)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          ),
       ]),
     );
   }

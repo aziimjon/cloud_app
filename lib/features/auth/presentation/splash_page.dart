@@ -80,15 +80,19 @@ class _SplashPageState extends State<SplashPage>
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(
-                      Icons.cloud_rounded,
-                      color: Colors.white,
-                      size: 50,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.asset(
+                        'assets/images/mycloud.png',
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'My Cloud',
+                    'MyCloud',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 32,
@@ -143,10 +147,14 @@ class OnboardingPage extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(32),
                   ),
-                  child: const Icon(
-                    Icons.cloud_rounded,
-                    color: Colors.white,
-                    size: 64,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: Image.asset(
+                      'assets/images/mycloud.png',
+                      width: 120,
+                      height: 120,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),

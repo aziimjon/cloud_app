@@ -22,7 +22,7 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _currentIndex = 0;
-  int _previousIndex = 0;
+  DateTime? _lastBackPress;
 
   String? _currentFolderId;
 
@@ -39,27 +39,55 @@ class _MainPageState extends State<MainPage> {
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
-      child: Scaffold(
-        body: IndexedStack(
-          index: _currentIndex,
-          children: [
-            HomePage(key: _homeKey, onFolderChanged: _onFolderChanged),
-            // ✅ FIX: передаём key чтобы управлять refresh
-            _RecentPage(key: _recentKey),
-            UploadPage(
-              parentId: _currentFolderId,
-              onUploadComplete: () {
-                // После загрузки — обновляем и Files и Recent
-                _homeKey.currentState?.reloadContent();
-                _recentKey.currentState?.reload();
-                setState(() => _currentIndex = 0);
-              },
-            ),
-            const SharedPage(),
-            ProfilePage(onLogout: _logout),
-          ],
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          // Non-Home tab → switch to Home
+          if (_currentIndex != 0) {
+            setState(() => _currentIndex = 0);
+            return;
+          }
+          // Home tab → double-press to exit
+          final now = DateTime.now();
+          if (_lastBackPress == null ||
+              now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+            _lastBackPress = now;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Нажмите ещё раз для выхода'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+            return;
+          }
+          SystemNavigator.pop();
+        },
+        child: Scaffold(
+          body: IndexedStack(
+            index: _currentIndex,
+            children: [
+              HomePage(key: _homeKey, onFolderChanged: _onFolderChanged),
+              // ✅ FIX: передаём key чтобы управлять refresh
+              _RecentPage(key: _recentKey),
+              UploadPage(
+                parentId: _currentFolderId,
+                onUploadComplete: () async {
+                  // Сначала переключаем на Files таб
+                  setState(() => _currentIndex = 0);
+                  // Ждём пока виджет отрисуется
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  // Потом обновляем контент
+                  _homeKey.currentState?.reloadContent();
+                  _recentKey.currentState?.reload();
+                },
+              ),
+              const SharedPage(),
+              ProfilePage(onLogout: _logout),
+            ],
+          ),
+          bottomNavigationBar: _buildBottomNav(),
         ),
-        bottomNavigationBar: _buildBottomNav(),
       ),
     );
   }
@@ -246,20 +274,14 @@ class _RecentPageState extends State<_RecentPage> {
   List<FileModel> _files = [];
   bool _isLoading = true;
   String? _error;
-  String? _authToken;
   final Map<String, String> _previewUrls = {};
 
   @override
   void initState() {
     super.initState();
     _loadRecentFiles();
-    _loadAuthToken();
   }
 
-  Future<void> _loadAuthToken() async {
-    final token = await SecureStorage.getAccessToken();
-    if (mounted) setState(() => _authToken = token);
-  }
 
   void _loadPreviewUrls(List<FileModel> files) {
     for (final f in files) {
@@ -278,12 +300,14 @@ class _RecentPageState extends State<_RecentPage> {
     if (mime.startsWith('image/')) {
       final fullUrl = await _repo.getPreviewUrl(file.id);
       if (fullUrl == null) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Не удалось открыть изображение')),
           );
+        }
         return;
       }
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -294,12 +318,14 @@ class _RecentPageState extends State<_RecentPage> {
     } else if (mime.startsWith('video/')) {
       final url = await _repo.getPreviewUrl(file.id);
       if (url == null) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Не удалось открыть видео')),
           );
+        }
         return;
       }
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(

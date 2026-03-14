@@ -1,7 +1,11 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorage {
-  static const _storage = FlutterSecureStorage();
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+    ),
+  );
 
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
@@ -9,38 +13,66 @@ class SecureStorage {
   static const _fullNameKey = 'full_name';
 
   static Future<void> saveFullName(String name) async {
-    await _storage.write(key: _fullNameKey, value: name);
+    try {
+      await _storage.write(key: _fullNameKey, value: name);
+    } catch (_) {}
   }
 
   static Future<String?> getFullName() async {
-    return await _storage.read(key: _fullNameKey);
+    try {
+      return await _storage.read(key: _fullNameKey);
+    } catch (_) {
+      await clearTokens();
+      return null;
+    }
   }
 
   static Future<void> saveTokens({
     required String accessToken,
     required String refreshToken,
   }) async {
-    await _storage.write(key: _accessTokenKey, value: accessToken);
-    await _storage.write(key: _refreshTokenKey, value: refreshToken);
+    try {
+      await _storage.write(key: _accessTokenKey, value: accessToken);
+      await _storage.write(key: _refreshTokenKey, value: refreshToken);
+    } catch (_) {}
   }
 
   static Future<void> saveUserId(String userId) async {
-    await _storage.write(key: _userIdKey, value: userId);
+    try {
+      await _storage.write(key: _userIdKey, value: userId);
+    } catch (_) {}
   }
 
   static Future<String?> getUserId() async {
-    return await _storage.read(key: _userIdKey);
+    try {
+      return await _storage.read(key: _userIdKey);
+    } catch (_) {
+      await clearTokens();
+      return null;
+    }
   }
 
   static Future<String?> getAccessToken() async {
-    return await _storage.read(key: _accessTokenKey);
+    try {
+      return await _storage.read(key: _accessTokenKey);
+    } catch (_) {
+      await clearTokens();
+      return null;
+    }
   }
 
   static Future<String?> getRefreshToken() async {
-    return await _storage.read(key: _refreshTokenKey);
+    try {
+      return await _storage.read(key: _refreshTokenKey);
+    } catch (_) {
+      await clearTokens();
+      return null;
+    }
   }
 
   static Future<void> clearTokens() async {
-    await _storage.deleteAll();
+    try {
+      await _storage.deleteAll();
+    } catch (_) {}
   }
 }
