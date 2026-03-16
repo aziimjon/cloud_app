@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/storage/secure_storage.dart';
@@ -9,6 +10,7 @@ class DownloadRepository {
   Future<void> downloadFile({
     required String fileId,
     required String fileName,
+    String? mimeType,
     void Function(int received, int total)? onProgress,
   }) async {
     try {
@@ -32,7 +34,8 @@ class DownloadRepository {
         throw const AppException(message: 'Cannot access storage directory');
       }
 
-      final savePath = '${dir.path}/$fileName';
+      final safeName = _ensureExtension(fileName, mimeType);
+      final savePath = '${dir.path}/$safeName';
 
       // Создаём отдельный Dio без логгера (иначе будет логировать байты)
       final downloadDio = Dio(
@@ -51,6 +54,14 @@ class DownloadRepository {
           onProgress?.call(received, total);
         },
       );
+
+      // MediaStore scan — чтобы галерея увидела файл
+      if (Platform.isAndroid) {
+        try {
+          const channel = MethodChannel('flutter/media_scanner');
+          await channel.invokeMethod('scanFile', savePath);
+        } catch (_) {}
+      }
     } on DioException catch (e) {
       throw AppException(
         message:
@@ -64,6 +75,33 @@ class DownloadRepository {
     } catch (e) {
       throw AppException(message: 'Download failed: ${e.toString()}');
     }
+  }
+
+  /// Добавляет расширение к имени файла если его нет
+  String _ensureExtension(String fileName, String? mimeType) {
+    if (fileName.contains('.')) return fileName;
+    if (mimeType == null) return fileName;
+    final ext = _mimeToExt(mimeType);
+    return ext != null ? '$fileName.$ext' : fileName;
+  }
+
+  /// Маппинг MIME → расширение
+  String? _mimeToExt(String mime) {
+    const map = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/heic': 'heic',
+      'video/mp4': 'mp4',
+      'video/quicktime': 'mov',
+      'video/x-msvideo': 'avi',
+      'video/webm': 'webm',
+      'video/3gpp': '3gp',
+      'application/pdf': 'pdf',
+    };
+    return map[mime.toLowerCase()];
   }
 
   /// Форматирование байтов в человекочитаемый вид

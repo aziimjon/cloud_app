@@ -32,8 +32,9 @@ class _FileItem {
 class UploadPage extends StatefulWidget {
   final String? parentId;
   final VoidCallback? onUploadComplete;
+  final List<dynamic>? initialFiles;
 
-  const UploadPage({super.key, this.parentId, this.onUploadComplete});
+  const UploadPage({super.key, this.parentId, this.onUploadComplete, this.initialFiles});
 
   @override
   State<UploadPage> createState() => _UploadPageState();
@@ -46,6 +47,34 @@ class _UploadPageState extends State<UploadPage> {
   bool _allDone = false;
   static const int _maxFiles = 50;
   int _currentIndex = 0;
+
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialFiles != null && widget.initialFiles!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialFiles());
+    }
+  }
+
+  Future<void> _loadInitialFiles() async {
+    if (widget.initialFiles == null) return;
+    setState(() {
+      _allDone = false;
+      for (final f in widget.initialFiles!) {
+        if (f.path == null) continue;
+        if (_queue.length >= _maxFiles) break;
+        if (!UploadRepository.isAllowed(f.name)) continue;
+        final alreadyAdded = _queue.any((q) => q.name == f.name);
+        if (!alreadyAdded) {
+          _queue.add(_FileItem(file: XFile(f.path!), name: f.name));
+        }
+      }
+    });
+    if (_queue.isNotEmpty) {
+      await _startUploadAll();
+    }
+  }
 
   Future<void> _pickFiles() async {
     if (_isUploading) return;

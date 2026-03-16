@@ -3,6 +3,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/errors/app_exception.dart';
 import 'models/folder_model.dart';
 import 'models/file_model.dart';
+import '../../../core/storage/secure_storage.dart';
 
 class HomeRepository {
   final Dio _dio = DioClient.instance;
@@ -56,11 +57,16 @@ class HomeRepository {
           .map((e) => FileModel.fromJson(e))
           .toList();
 
+      final int totalCount = responseData is Map
+          ? (responseData['count'] as int? ?? results.length)
+          : results.length;
+
       return {
         'folders': folders,
         'files': files,
         'hasNext': hasNext,
         'count': results.length,
+        'totalCount': totalCount,
       };
     } on DioException catch (e) {
       throw AppException(
@@ -75,12 +81,37 @@ class HomeRepository {
     String? parentId,
   }) async {
     try {
-      final response = await _dio.post(
+      // nginx redirects POST /folder/ → 404, so use direct Dio with no redirect
+      final directDio = Dio(BaseOptions(
+        baseUrl: _dio.options.baseUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        followRedirects: false,
+        validateStatus: (s) => s != null && s < 500,
+      ));
+      
+      final t = await SecureStorage.getAccessToken();
+      if (t != null) {
+        directDio.options.headers['Authorization'] = 'Bearer $t';
+      }
+      
+      final response = await directDio.post(
         '/content/folder/',
         data: {'name': name, if (parentId != null) 'parent': parentId},
       );
-      final data = response.data['result'] ?? response.data;
-      return FolderModel.fromJson(data);
+      
+      if (response.statusCode == 404) {
+        throw const AppException(message: 'Не удалось создать папку: Сервер вернул 404');
+      }
+
+      // API returns folder object directly (201 Created)
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return FolderModel.fromJson(data);
+      }
+      throw AppException(message: 'Неверный формат ответа (код: ${response.statusCode})');
     } on DioException catch (e) {
       throw AppException(
         message: e.response?.data?['message'] ?? 'Не удалось создать папку',

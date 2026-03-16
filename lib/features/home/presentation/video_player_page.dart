@@ -4,11 +4,13 @@ import 'package:video_player/video_player.dart';
 class VideoPlayerPage extends StatefulWidget {
   final String videoUrl;
   final String fileName;
+  final String? authToken;
 
   const VideoPlayerPage({
     super.key,
     required this.videoUrl,
     required this.fileName,
+    this.authToken,
   });
 
   @override
@@ -27,7 +29,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
+    _controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.videoUrl),
+      httpHeaders: widget.authToken != null
+          ? {'Authorization': 'Bearer ${widget.authToken}'}
+          : {},
+    )
       ..initialize()
           .then((_) {
             if (mounted) {
