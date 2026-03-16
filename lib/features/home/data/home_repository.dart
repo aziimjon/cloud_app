@@ -323,18 +323,51 @@ class HomeRepository {
     }
   }
 
-  /// Preview endpoint — returns pre-signed MinIO URL for file streaming
+  /// Preview endpoint — returns pre-signed MinIO URL for file streaming.
+  /// Polls up to 10 times (every 2s) while server is generating the preview.
   Future<String?> getPreviewUrl(String fileId) async {
-    try {
-      final response = await _dio.get('/content/files/$fileId/preview/');
-      final data = response.data;
-      if (data is Map && data['url'] != null) {
-        return data['url'] as String;
+    const maxAttempts = 10;
+    const delay = Duration(seconds: 2);
+
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        final token = await SecureStorage.getAccessToken();
+        final response = await _dio.get(
+          'content/files/$fileId/preview/',
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
+
+        final data = response.data;
+        final url = data['url'] as String?;
+        final status = data['preview_status'] as String? ?? '';
+
+        // URL готов — возвращаем
+        if (url != null && url.isNotEmpty) return url;
+
+        // Ещё генерируется — ждём и повторяем
+        if (status == 'processing' || status == 'pending') {
+          if (attempt < maxAttempts - 1) {
+            await Future.delayed(delay);
+            continue;
+          }
+        }
+
+        // Превью не требуется — отдаём прямую ссылку на скачивание
+        if (status == 'not_required' || status == 'completed') {
+          return 'content/files/$fileId/download/';
+        }
+
+        return null;
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) return null;
+        if (attempt < maxAttempts - 1) {
+          await Future.delayed(delay);
+          continue;
+        }
+        return null;
       }
-      return null;
-    } catch (_) {
-      return null;
     }
+    return null;
   }
 
   // ✅ FIX: id может быть String или int — всегда toString()

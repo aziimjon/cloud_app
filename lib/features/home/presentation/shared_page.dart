@@ -16,6 +16,7 @@ import '../../share/presentation/pages/share_user_files_page.dart';
 import '../../share/presentation/widgets/share_dialog.dart';
 import '../../share/data/repository/share_repository_impl.dart';
 import '../../share/data/remote/share_remote_data_source_impl.dart';
+import 'share_folder_files_page.dart';
 
 /// Shared page — combines "Shared with me" and "Shared by me" via segments.
 class SharedPage extends StatefulWidget {
@@ -182,38 +183,17 @@ class _SharedPageState extends State<SharedPage> {
   }
 
   Future<void> _openUserFiles(String userId, String userName) async {
-    setState(() {
-      _selectedUserId = userId;
-      _selectedUserName = userName;
-      _isLoading = true;
-      _error = null;
-      _selectedFolderId = null;
-    });
-    try {
-      final data = await _repo.getSharedFromUser(userId);
-      if (!mounted) return;
-      // Swagger: ControllerDefaultResponse { message, result }
-      final result = data['result'];
-      List<dynamic> items = [];
-      if (result is List) {
-        items = result;
-      } else if (result is Map) {
-        items = result['results'] ?? result['files'] ?? [];
-      } else {
-        items = data['results'] ?? data['files'] ?? [];
-      }
-      setState(() {
-        _items = items;
-        _isLoading = false;
-      });
-      _loadPreviewUrls(_items);
-    } on AppException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _isLoading = false;
-      });
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ShareFolderFilesPage(
+          userId: userId,
+          folderId: null,
+          userName: userName,
+        ),
+      ),
+    );
+    _loadSharedUsers();
   }
 
   Future<void> _openSharedFolder(String folderId) async {

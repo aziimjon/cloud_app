@@ -1,11 +1,35 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data/models/share_models.dart';
 import '../bloc/share_bloc.dart';
 import '../bloc/share_event.dart';
 import '../bloc/share_state.dart';
 
-/// Dialog for sharing files/folders with users by phone numbers.
+/// Formats phone input as: "XX XXX XX XX" (9 digits max).
+class _PhoneInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(' ', '');
+    if (digits.isEmpty) return newValue.copyWith(text: '');
+    final buffer = StringBuffer();
+    for (int i = 0; i < digits.length && i < 9; i++) {
+      if (i == 2 || i == 5 || i == 7) buffer.write(' ');
+      buffer.write(digits[i]);
+    }
+    final result = buffer.toString();
+    return newValue.copyWith(
+      text: result,
+      selection: TextSelection.collapsed(offset: result.length),
+    );
+  }
+}
+
+/// Crystal-style dialog for sharing files/folders with users by phone numbers.
 class ShareDialog extends StatefulWidget {
   final List<String> initialFileIds;
   final List<String> initialFolderIds;
@@ -41,24 +65,29 @@ class _ShareDialogState extends State<ShareDialog> {
   }
 
   void _addPhone() {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) return;
-    if (_phoneNumbers.contains(phone)) return;
+    final digits = _phoneController.text.replaceAll(' ', '');
+    if (digits.length != 9) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Введите 9 цифр номера'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final number = '+998$digits';
+    if (_phoneNumbers.contains(number)) return;
     setState(() {
-      _phoneNumbers.add(phone);
+      _phoneNumbers.add(number);
       _phoneController.clear();
     });
-  }
-
-  void _removePhone(String phone) {
-    setState(() => _phoneNumbers.remove(phone));
   }
 
   void _share() {
     if (_phoneNumbers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Добавьте хотя бы один номер'),
+          content: Text('Добавьте хотя бы один номер телефона'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -80,8 +109,8 @@ class _ShareDialogState extends State<ShareDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final totalItems = _fileIds.length + _folderIds.length;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
 
     return BlocListener<ShareBloc, ShareState>(
       listener: (context, state) {
@@ -103,193 +132,255 @@ class _ShareDialogState extends State<ShareDialog> {
           );
         }
       },
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: cs.surface,
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              width: double.infinity,
               decoration: BoxDecoration(
-                color: const Color(0xFF1A73E8).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.share_rounded,
-                color: Color(0xFF1A73E8),
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                totalItems > 0
-                    ? 'Поделиться ($totalItems)'
-                    : 'Поделиться',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.75)
+                    : Colors.white.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.80),
                 ),
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Phone input + add button
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      style: TextStyle(color: cs.onSurface),
-                      onSubmitted: (_) => _addPhone(),
-                      decoration: InputDecoration(
-                        hintText: '+998 ...',
-                        hintStyle: TextStyle(
-                            color: cs.onSurface.withValues(alpha: 0.4)),
-                        filled: true,
-                        fillColor: cs.surfaceContainerHighest,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF1A73E8),
-                            width: 1.5,
-                          ),
-                        ),
-                        prefixIcon:
-                            const Icon(Icons.phone, color: Color(0xFF1A73E8)),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _addPhone,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A73E8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                      child: const Text('+',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold)),
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 32,
+                    offset: const Offset(0, 12),
                   ),
                 ],
               ),
-
-              // Phone chips
-              if (_phoneNumbers.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  'Номера телефонов:',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: cs.onSurface.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _phoneNumbers
-                      .map((phone) => Chip(
-                            label: Text(phone,
-                                style: const TextStyle(fontSize: 12)),
-                            deleteIcon:
-                                const Icon(Icons.close, size: 16),
-                            onDeleted: () => _removePhone(phone),
-                            backgroundColor: cs.surfaceContainerHighest,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                          ))
-                      .toList(),
-                ),
-              ],
-
-              // Selected items info
-              if (totalItems > 0) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 1. Header
+                  Row(
                     children: [
-                      Icon(Icons.info_outline,
-                          size: 16,
-                          color: cs.onSurface.withValues(alpha: 0.5)),
-                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A73E8).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.share_rounded,
+                          color: Color(0xFF1A73E8),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          '${_fileIds.length} файлов, ${_folderIds.length} папок',
+                          'Поделиться (${_fileIds.length + _folderIds.length})',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurface.withValues(alpha: 0.6),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: textColor,
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isSending ? null : () => Navigator.pop(context),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: _isSending ? null : _share,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A73E8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                  const SizedBox(height: 16),
+
+                  // 2. Phone input + add button
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          style: TextStyle(color: textColor, fontSize: 16),
+                          onSubmitted: (_) => _addPhone(),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(11),
+                            _PhoneInputFormatter(),
+                          ],
+                          decoration: InputDecoration(
+                            prefixText: '+998 ',
+                            prefixStyle: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              color: textColor,
+                            ),
+                            hintText: '98 765 43 21',
+                            hintStyle: TextStyle(
+                              color: textColor.withValues(alpha: 0.35),
+                            ),
+                            counterText: '',
+                            filled: true,
+                            fillColor: isDark
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.black.withValues(alpha: 0.06),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _addPhone,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1A73E8),
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Icon(Icons.add, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // 3. Phone chips
+                  if (_phoneNumbers.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _phoneNumbers
+                            .map(
+                              (n) => Chip(
+                                label: Text(
+                                  n,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF1A73E8),
+                                  ),
+                                ),
+                                deleteIcon: const Icon(Icons.close, size: 16),
+                                onDeleted: () =>
+                                    setState(() => _phoneNumbers.remove(n)),
+                                backgroundColor: const Color(0xFF1A73E8)
+                                    .withValues(alpha: 0.12),
+                                deleteIconColor: const Color(0xFF1A73E8),
+                                side: BorderSide(
+                                  color: const Color(0xFF1A73E8)
+                                      .withValues(alpha: 0.3),
+                                ),
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 12),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.10)
+                        : Colors.black.withValues(alpha: 0.10),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // 4. Info
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : Colors.black.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_fileIds.length} файлов, ${_folderIds.length} папок',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 5. Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed:
+                              _isSending ? null : () => Navigator.pop(context),
+                          child: Text(
+                            'Отмена',
+                            style: TextStyle(color: textColor),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _isSending ? null : _share,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1A73E8),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: _isSending
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Поделиться',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            child: _isSending
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text(
-                    'Поделиться',
-                    style: TextStyle(color: Colors.white),
-                  ),
           ),
-        ],
+        ),
       ),
     );
   }
