@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_app/l10n/app_localizations.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../profile/data/profile_repository.dart';
-import '../../../../main.dart';
+import '../../../main.dart';
 
 class HomePage extends StatefulWidget {
   final void Function(String? folderId)? onFolderChanged;
@@ -58,17 +59,18 @@ class HomePageState extends State<HomePage> {
   void reloadContent() => _loadData();
 
   String _fmt(dynamic b) {
-    if (b == null) return '0 КБ';
+    if (b == null) return '0 KB';
     final v = (b is num) ? b.toDouble() : double.tryParse(b.toString()) ?? 0;
-    if (v >= 1073741824) return '${(v / 1073741824).toStringAsFixed(2)} ГБ';
-    if (v >= 1048576) return '${(v / 1048576).toStringAsFixed(1)} МБ';
-    return '${(v / 1024).toStringAsFixed(0)} КБ';
+    if (v >= 1073741824) return '${(v / 1073741824).toStringAsFixed(2)} GB';
+    if (v >= 1048576) return '${(v / 1048576).toStringAsFixed(1)} MB';
+    return '${(v / 1024).toStringAsFixed(0)} KB';
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final t = AppLocalizations.of(context)!;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
@@ -92,7 +94,7 @@ class HomePageState extends State<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Welcome back,',
+                        t.welcomeBack,
                         style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.5),
                           fontSize: 11,
@@ -101,7 +103,7 @@ class HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _userName ?? 'User',
+                        _userName ?? t.profile,
                         style: TextStyle(
                           color: cs.onSurface,
                           fontWeight: FontWeight.bold,
@@ -121,11 +123,12 @@ class HomePageState extends State<HomePage> {
                       color: cs.onSurface,
                     ),
                     onPressed: () => ThemeNotifier.instance.toggle(),
-                    tooltip: 'Сменить тему',
+                    tooltip: t.theme,
                   ),
                   IconButton(
                     icon: Icon(Icons.refresh, color: cs.onSurface),
                     onPressed: _loadData,
+                    tooltip: t.refresh,
                   ),
                   const SizedBox(width: 4),
                 ],
@@ -142,11 +145,11 @@ class HomePageState extends State<HomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildStorageCard(cs),
+                      _buildStorageCard(cs, t),
                       const SizedBox(height: 24),
-                      _buildStatisticsSection(cs),
+                      _buildStatisticsSection(cs, t),
                       const SizedBox(height: 24),
-                      _buildQuickActions(context),
+                      _buildQuickActions(context, t),
                     ],
                   ),
                 ),
@@ -158,7 +161,7 @@ class HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildStorageCard(ColorScheme cs) {
+  Widget _buildStorageCard(ColorScheme cs, AppLocalizations t) {
     final used = _storageData['used_storage'];
     final limit = _storageData['storage_limit'];
     final percent = (_storageData['percent_used'] as num?)?.toDouble() ?? 0;
@@ -195,16 +198,16 @@ class HomePageState extends State<HomePage> {
                 child: const Icon(Icons.cloud_done_rounded, color: Colors.white, size: 24),
               ),
               const SizedBox(width: 12),
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'My Cloud Storage',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    t.myCloudStorage,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   Text(
-                    'Ваше облачное хранилище',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                    t.yourCloudStorage,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
@@ -225,11 +228,11 @@ class HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${_fmt(used)} использовано',
+                '${_fmt(used)} ${t.used}',
                 style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
               ),
               Text(
-                '${_fmt(limit)} всего',
+                '${_fmt(limit)} ${t.total}',
                 style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
               ),
             ],
@@ -239,7 +242,7 @@ class HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildStatisticsSection(ColorScheme cs) {
+  Widget _buildStatisticsSection(ColorScheme cs, AppLocalizations t) {
     final image = _statsData['image'] as Map<String, dynamic>? ?? {};
     final video = _statsData['video'] as Map<String, dynamic>? ?? {};
     final sharedByMe = _statsData['shared_by_me'] as Map<String, dynamic>? ?? {};
@@ -249,7 +252,7 @@ class HomePageState extends State<HomePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Общая статистика',
+          t.overallStats,
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -263,7 +266,7 @@ class HomePageState extends State<HomePage> {
               child: _StatCard(
                 icon: Icons.image_rounded,
                 iconColor: const Color(0xFF1A73E8),
-                label: 'Изображения',
+                label: t.images,
                 count: '${image['count'] ?? 0}',
                 subtitle: _fmt(image['size']),
               ),
@@ -273,7 +276,7 @@ class HomePageState extends State<HomePage> {
               child: _StatCard(
                 icon: Icons.videocam_rounded,
                 iconColor: const Color(0xFFE53935),
-                label: 'Видео',
+                label: t.videos,
                 count: '${video['count'] ?? 0}',
                 subtitle: _fmt(video['size']),
               ),
@@ -287,9 +290,9 @@ class HomePageState extends State<HomePage> {
               child: _StatCard(
                 icon: Icons.share_rounded,
                 iconColor: Colors.green,
-                label: 'Поделился я',
+                label: t.sharedByMe,
                 count: '${(sharedByMe['files'] ?? 0) + (sharedByMe['folders'] ?? 0)}',
-                subtitle: '${sharedByMe['users'] ?? 0} участн. · ${sharedByMe['folders'] ?? 0} папк.',
+                subtitle: '${sharedByMe['users'] ?? 0} ${t.participants} · ${sharedByMe['folders'] ?? 0} ${t.folders.toLowerCase()}',
               ),
             ),
             const SizedBox(width: 12),
@@ -297,9 +300,9 @@ class HomePageState extends State<HomePage> {
               child: _StatCard(
                 icon: Icons.person_rounded,
                 iconColor: Colors.orange,
-                label: 'Со мной',
+                label: t.sharedWithMe,
                 count: '${(sharedWithMe['files'] ?? 0) + (sharedWithMe['folders'] ?? 0)}',
-                subtitle: '${sharedWithMe['users'] ?? 0} участн. · ${sharedWithMe['folders'] ?? 0} папк.',
+                subtitle: '${sharedWithMe['users'] ?? 0} ${t.participants} · ${sharedWithMe['folders'] ?? 0} ${t.folders.toLowerCase()}',
               ),
             ),
           ],
@@ -308,13 +311,13 @@ class HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context) {
+  Widget _buildQuickActions(BuildContext context, AppLocalizations t) {
     final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Быстрые действия',
+          t.quickActions,
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
@@ -323,7 +326,7 @@ class HomePageState extends State<HomePage> {
             Expanded(
               child: _QuickActionCard(
                 icon: Icons.folder_rounded,
-                label: 'Мои файлы',
+                label: t.myFiles,
                 color: const Color(0xFF1A73E8),
                 onTap: () => widget.onNavigateToFiles?.call(),
               ),
@@ -332,7 +335,7 @@ class HomePageState extends State<HomePage> {
             Expanded(
               child: _QuickActionCard(
                 icon: Icons.star_rounded,
-                label: 'Избранное',
+                label: t.favourites,
                 color: Colors.amber,
                 onTap: () => widget.onToggleFavourites?.call(),
               ),
@@ -341,7 +344,7 @@ class HomePageState extends State<HomePage> {
             Expanded(
               child: _QuickActionCard(
                 icon: Icons.people_rounded,
-                label: 'Shared',
+                label: t.shared,
                 color: Colors.green,
                 onTap: () => widget.onNavigateToShared?.call(),
               ),

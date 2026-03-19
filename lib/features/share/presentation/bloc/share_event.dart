@@ -88,3 +88,40 @@ class LoadSharedWithMeUserFolder extends ShareEvent {
   @override
   List<Object?> get props => [userId, folderId];
 }
+
+// ================= NEW SHARE REQUEST EVENTS =================
+
+class CreateShareRequestEvent extends ShareEvent {
+  final ShareRequestCreateModel body;
+
+  const CreateShareRequestEvent({required this.body});
+
+  @override
+  List<Object?> get props => [body.name, body.files, body.folders];
+}
+
+class LoadShareRequests extends ShareEvent {
+  const LoadShareRequests();
+}
+
+class LoadShareRequestDetail extends ShareEvent {
+  final int id;
+
+  const LoadShareRequestDetail({required this.id});
+
+  @override
+  List<Object?> get props => [id];
+}
+
+class UpdatePermissionStatus extends ShareEvent {
+  final int permissionId;
+  final String status;
+
+  const UpdatePermissionStatus({
+    required this.permissionId,
+    required this.status,
+  });
+
+  @override
+  List<Object?> get props => [permissionId, status];
+}

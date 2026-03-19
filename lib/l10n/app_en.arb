@@ -1,0 +1,209 @@
+{
+  "@@locale": "en",
+  "appName": "MyCloud",
+  "welcomeBack": "Welcome back,",
+  "home": "Home",
+  "files": "Files",
+  "shared": "Shared",
+  "profile": "Profile",
+  "recent": "Recent",
+  "myCloudStorage": "My Cloud Storage",
+  "yourCloudStorage": "Your cloud storage",
+  "used": "used",
+  "total": "total",
+  "quickActions": "Quick Actions",
+  "myFiles": "My Files",
+  "favourites": "Favourites",
+  "overallStats": "Overall Statistics",
+  "images": "Images",
+  "videos": "Videos",
+  "sharedByMe": "Shared by me",
+  "sharedWithMe": "Shared with me",
+  "participants": "participants",
+  "folders": "Folders",
+  "folder": "Folder",
+  "createFolder": "Create Folder",
+  "newFolder": "New Folder",
+  "folderName": "Folder name",
+  "cancel": "Cancel",
+  "create": "Create",
+  "save": "Save",
+  "delete": "Delete",
+  "rename": "Rename",
+  "move": "Move",
+  "download": "Download",
+  "share": "Share",
+  "preview": "Preview",
+  "details": "Details",
+  "open": "Open",
+  "addToFavourites": "Add to favourites",
+  "removeFromFavourites": "Remove from favourites",
+  "deleteConfirm": "Delete?",
+  "deleteConfirmMessage": "Are you sure you want to delete \"{name}\"?\nThis action is irreversible.",
+  "@deleteConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "successfullyMoved": "Successfully moved",
+  "fileSaved": "File saved: {name}",
+  "@fileSaved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyFolder": "Nothing here yet",
+  "emptyFolderSubtitle": "Create a folder or upload photos / videos",
+  "noFavourites": "No favourite files",
+  "noFavouritesSubtitle": "Tap star on a file to add it",
+  "filter": "Filter",
+  "all": "All",
+  "photos": "Photos",
+  "pinnedFolders": "Pinned folders",
+  "maxPinnedFolders": "Maximum 5 pinned folders",
+  "alreadyPinned": "Folder already pinned",
+  "pin": "Pin",
+  "unpin": "Unpin",
+  "unpinFolder": "Unpin folder?",
+  "shareViaLink": "Share via link",
+  "shareByPhone": "By phone",
+  "shareByLink": "By link",
+  "linkName": "Link name",
+  "generate": "Generate",
+  "generatedLink": "Generated link",
+  "linkCopied": "Link copied",
+  "copy": "Copy",
+  "copyLink": "Copy link",
+  "shareSuccess": "Shared successfully",
+  "addAtLeastOnePhone": "Add at least one phone number",
+  "enter9Digits": "Enter 9 digits",
+  "enterLinkName": "Enter link name",
+  "fileDetails": "File details",
+  "folderDetails": "Folder details",
+  "fileName": "Name",
+  "fileSize": "Size",
+  "createdAt": "Created at",
+  "capturedAt": "Captured at",
+  "totalSize": "Total size",
+  "fileCount": "Files",
+  "folderCount": "Folders",
+  "shareRequests": "Share Requests",
+  "shareRequestsSubtitle": "Manage links and access",
+  "shareRequestDetails": "Share request details",
+  "request": "Request",
+  "linkNameLabel": "LINK NAME",
+  "shareLinkLabel": "SHARE LINK",
+  "permissionRequests": "PERMISSION REQUESTS",
+  "pending": "Pending",
+  "approved": "Approved",
+  "rejected": "Rejected",
+  "review": "Review",
+  "reviewAccessRequest": "Review access request",
+  "reviewAccessRequestSubtitle": "Choose whether this user should get access.",
+  "reject": "Reject",
+  "approve": "Approve",
+  "accessApproved": "Access approved",
+  "accessRejected": "Access rejected",
+  "noShareRequests": "No share requests",
+  "noShareRequestsSubtitle": "Share files via link and they will appear here",
+  "personalData": "PERSONAL DATA",
+  "changeName": "Change name",
+  "changePhone": "Change phone",
+  "changePassword": "Change password",
+  "newName": "New name",
+  "newPhone": "New number",
+  "oldPassword": "Old password",
+  "newPassword": "New password",
+  "confirmPassword": "Confirm password",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "passwordTooShort": "Minimum 8 characters",
+  "nameUpdated": "Name updated",
+  "phoneUpdated": "Phone updated",
+  "passwordChanged": "Password changed",
+  "avatarUpdated": "Avatar updated",
+  "storage": "Storage",
+  "language": "Language",
+  "theme": "APPEARANCE",
+  "light": "Light",
+  "dark": "Dark",
+  "logout": "Sign out",
+  "logoutConfirm": "Sign out",
+  "logoutConfirmMessage": "Are you sure you want to sign out?",
+  "refresh": "Refresh",
+  "retry": "Retry",
+  "selected": "Selected: {count}",
+  "@selected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectAll": "All",
+  "deselectAll": "Deselect all",
+  "uploadFiles": "Upload files",
+  "chooseLanguage": "Choose language",
+  "home_breadcrumb": "Home",
+  "favourites_breadcrumb": "Favourites",
+  "selectedCount": "Selected: {count}",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addedToFavourites": "Added to favourites",
+  "couldNotOpenImage": "Could not open image",
+  "couldNotOpenVideo": "Could not open video",
+  "noSharedWithMe": "No one has shared files",
+  "noSharedWithMeSubtitle": "When someone shares a file — it will appear here",
+  "noSharedByMe": "You haven't shared with anyone yet",
+  "noSharedByMeSubtitle": "Tap the share button to share files",
+  "noSharedItems": "No shared items",
+  "sharedWithLabel": "For {name}",
+  "@sharedWithLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "revokeAccess": "Revoke access",
+  "revokeAccessConfirm": "Revoke access to \"{name}\"?",
+  "@revokeAccessConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "revoke": "Revoke",
+  "filesCount": "{count} files",
+  "@filesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "openLabel": "Open",
+  "usersTab": "Users",
+  "sharedItemsTab": "Shared items",
+  "newNameHint": "New name",
+  "deleteItems": "{count} items",
+  "@deleteItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pinLabel": "📌 Pin",
+  "unpinLabel": "📌 Unpin",
+  "favourite": "Favourite"
+}

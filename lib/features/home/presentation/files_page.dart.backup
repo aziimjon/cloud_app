@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:cloud_app/l10n/app_localizations.dart';
 import '../data/home_repository.dart';
 import '../data/download_repository.dart';
 import '../data/models/folder_model.dart';
@@ -69,12 +68,13 @@ class FilesPageState extends State<FilesPage> {
   int _totalFilesCount = 0;
   late final ShareBloc _shareBloc;
 
+  // ── fmt helper ──────────────────────────────────────────────────────────────
   String _fmt(dynamic b) {
-    if (b == null) return '0 KB';
+    if (b == null) return '0 КБ';
     final v = (b is num) ? b.toDouble() : double.tryParse(b.toString()) ?? 0;
-    if (v >= 1073741824) return '${(v / 1073741824).toStringAsFixed(2)} GB';
-    if (v >= 1048576) return '${(v / 1048576).toStringAsFixed(1)} MB';
-    return '${(v / 1024).toStringAsFixed(0)} KB';
+    if (v >= 1073741824) return '${(v / 1073741824).toStringAsFixed(2)} ГБ';
+    if (v >= 1048576) return '${(v / 1048576).toStringAsFixed(1)} МБ';
+    return '${(v / 1024).toStringAsFixed(0)} КБ';
   }
 
   Widget _buildPaginationRow({
@@ -109,11 +109,10 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Future<void> _pinFolder(FolderModel folder) async {
-    final t = AppLocalizations.of(context)!;
     if (_pinnedFolders.length >= 5) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t.maxPinnedFolders)),
+          const SnackBar(content: Text('Максимум 5 закреплённых папок')),
         );
       }
       return;
@@ -121,7 +120,7 @@ class FilesPageState extends State<FilesPage> {
     if (_getPinId(folder.id) != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t.alreadyPinned)),
+          const SnackBar(content: Text('Папка уже закреплена')),
         );
       }
       return;
@@ -252,14 +251,13 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Future<void> _openFileViewer(FileModel file) async {
-    final t = AppLocalizations.of(context)!;
     final mime = file.mimeType.toLowerCase();
     if (mime.startsWith('image/')) {
       final fullUrl = await _repo.getPreviewUrl(file.id);
       if (fullUrl == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(t.couldNotOpenImage)),
+            const SnackBar(content: Text('Не удалось открыть изображение')),
           );
         }
         return;
@@ -291,7 +289,7 @@ class FilesPageState extends State<FilesPage> {
       if (url == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(t.couldNotOpenVideo)),
+            const SnackBar(content: Text('Не удалось открыть видео')),
           );
         }
         return;
@@ -467,7 +465,6 @@ class FilesPageState extends State<FilesPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final cs = Theme.of(ctx).colorScheme;
-        final t = AppLocalizations.of(ctx)!;
         return Container(
           decoration: BoxDecoration(
             color: cs.surface,
@@ -491,16 +488,16 @@ class FilesPageState extends State<FilesPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(t.filter,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Фильтр',
+                    style:
+                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
                   children: [
                     _FilterChip(
-                      label: t.all,
+                      label: 'Все',
                       icon: Icons.apps_rounded,
                       isActive: _activeFilter == _FilterType.all,
                       onTap: () {
@@ -509,7 +506,7 @@ class FilesPageState extends State<FilesPage> {
                       },
                     ),
                     _FilterChip(
-                      label: t.photos,
+                      label: 'Фото',
                       icon: Icons.image_rounded,
                       isActive: _activeFilter == _FilterType.images,
                       onTap: () {
@@ -518,7 +515,7 @@ class FilesPageState extends State<FilesPage> {
                       },
                     ),
                     _FilterChip(
-                      label: t.videos,
+                      label: 'Видео',
                       icon: Icons.videocam_rounded,
                       isActive: _activeFilter == _FilterType.videos,
                       onTap: () {
@@ -539,7 +536,6 @@ class FilesPageState extends State<FilesPage> {
 
   Future<void> _showCreateFolderDialog() async {
     final controller = TextEditingController();
-    final t = AppLocalizations.of(context)!;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -573,8 +569,8 @@ class FilesPageState extends State<FilesPage> {
                           color: Colors.blue, size: 20),
                     ),
                     const SizedBox(width: 12),
-                    Text(t.newFolder,
-                        style: const TextStyle(
+                    const Text('Новая папка',
+                        style: TextStyle(
                             fontSize: 18, fontWeight: FontWeight.bold)),
                   ],
                 ),
@@ -584,7 +580,7 @@ class FilesPageState extends State<FilesPage> {
                   autofocus: true,
                   style: TextStyle(color: cs.onSurface),
                   decoration: InputDecoration(
-                    hintText: t.folderName,
+                    hintText: 'Название папки',
                     hintStyle: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.4)),
                     filled: true,
@@ -614,7 +610,7 @@ class FilesPageState extends State<FilesPage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: Text(t.cancel),
+                        child: const Text('Отмена'),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -648,8 +644,8 @@ class FilesPageState extends State<FilesPage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: Text(t.create,
-                            style: const TextStyle(color: Colors.white)),
+                        child: const Text('Создать',
+                            style: TextStyle(color: Colors.white)),
                       ),
                     ),
                   ],
@@ -686,6 +682,7 @@ class FilesPageState extends State<FilesPage> {
     );
   }
 
+  // ── Info dialog ─────────────────────────────────────────────────────────────
   void _showInfoDialog({
     required String id,
     required String type,
@@ -705,14 +702,14 @@ class FilesPageState extends State<FilesPage> {
         previewUrl: previewUrl,
         iconColor: iconColor,
         icon: icon,
-        fetchInfo: () => _profileRepo.getContentInfo(id: id, type: type),
+        fetchInfo: () =>
+            _profileRepo.getContentInfo(id: id, type: type),
         fmt: _fmt,
       ),
     );
   }
 
   void _showFolderMenu(FolderModel folder) {
-    final t = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -766,7 +763,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.folder_open,
                   color: Colors.blue,
-                  title: t.open,
+                  title: 'Открыть',
                   onTap: () {
                     Navigator.pop(ctx);
                     _openFolder(folder);
@@ -775,7 +772,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.info_outline_rounded,
                   color: Colors.blueGrey,
-                  title: t.details,
+                  title: 'Посмотреть детали',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showInfoDialog(
@@ -791,7 +788,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.share_rounded,
                   color: Colors.green,
-                  title: t.share,
+                  title: 'Поделиться',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showShareDialog(fileIds: [], folderIds: [folder.id]);
@@ -800,7 +797,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.drive_file_rename_outline,
                   color: Colors.orange,
-                  title: t.rename,
+                  title: 'Переименовать',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showRenameDialog(
@@ -808,7 +805,9 @@ class FilesPageState extends State<FilesPage> {
                       onRename: (newName) async {
                         try {
                           await _repo.renameItem(
-                              type: 'folder', id: folder.id, name: newName);
+                              type: 'folder',
+                              id: folder.id,
+                              name: newName);
                           if (!mounted) return;
                           _loadContent();
                         } on AppException catch (e) {
@@ -826,7 +825,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.arrow_forward_rounded,
                   color: Colors.blue,
-                  title: t.move,
+                  title: 'Переместить',
                   onTap: () async {
                     Navigator.pop(ctx);
                     final result = await Navigator.push<bool>(
@@ -843,8 +842,8 @@ class FilesPageState extends State<FilesPage> {
                       _loadContent();
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(t.successfullyMoved),
+                        const SnackBar(
+                          content: Text('Успешно перемещено'),
                           backgroundColor: Colors.green,
                         ),
                       );
@@ -854,7 +853,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.delete_outline,
                   color: Colors.red,
-                  title: t.delete,
+                  title: 'Удалить',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showDeleteConfirmDialog(
@@ -884,7 +883,7 @@ class FilesPageState extends State<FilesPage> {
                     return _buildBottomSheetItem(
                       icon: Icons.push_pin_outlined,
                       color: isPinned ? Colors.orange : Colors.blueGrey,
-                      title: isPinned ? t.unpinLabel : t.pinLabel,
+                      title: isPinned ? '📌 Открепить' : '📌 Закрепить',
                       onTap: () {
                         Navigator.pop(ctx);
                         if (isPinned) {
@@ -917,7 +916,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   void _showFileMenu(FileModel file) {
-    final t = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -953,7 +951,8 @@ class FilesPageState extends State<FilesPage> {
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: _color(file.mimeType).withValues(alpha: 0.12),
+                          color: _color(file.mimeType)
+                              .withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(_icon(file.mimeType),
@@ -967,7 +966,8 @@ class FilesPageState extends State<FilesPage> {
                             Text(
                               file.name,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 16),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -995,8 +995,8 @@ class FilesPageState extends State<FilesPage> {
                       : Icons.star_border_rounded,
                   color: file.isFavourite ? Colors.amber : Colors.grey,
                   title: file.isFavourite
-                      ? t.removeFromFavourites
-                      : t.addToFavourites,
+                      ? 'Убрать из избранного'
+                      : 'В избранное',
                   onTap: () {
                     Navigator.pop(ctx);
                     FavouritesProvider.instance.toggleFavourite(file);
@@ -1005,7 +1005,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.download_rounded,
                   color: Colors.blue,
-                  title: t.download,
+                  title: 'Скачать',
                   onTap: () {
                     Navigator.pop(ctx);
                     _startDownload(file);
@@ -1014,7 +1014,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.remove_red_eye_outlined,
                   color: Colors.purple,
-                  title: t.preview,
+                  title: 'Предпросмотр',
                   onTap: () {
                     Navigator.pop(ctx);
                     _openFileViewer(file);
@@ -1023,7 +1023,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.info_outline_rounded,
                   color: Colors.blueGrey,
-                  title: t.details,
+                  title: 'Посмотреть детали',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showInfoDialog(
@@ -1039,7 +1039,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.drive_file_rename_outline,
                   color: Colors.orange,
-                  title: t.rename,
+                  title: 'Переименовать',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showRenameDialog(
@@ -1047,7 +1047,9 @@ class FilesPageState extends State<FilesPage> {
                       onRename: (newName) async {
                         try {
                           await _repo.renameItem(
-                              type: 'file', id: file.id, name: newName);
+                              type: 'file',
+                              id: file.id,
+                              name: newName);
                           if (!mounted) return;
                           _loadContent();
                         } on AppException catch (e) {
@@ -1065,7 +1067,7 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.arrow_forward_rounded,
                   color: Colors.blue,
-                  title: t.move,
+                  title: 'Переместить',
                   onTap: () async {
                     Navigator.pop(ctx);
                     final result = await Navigator.push<bool>(
@@ -1082,8 +1084,8 @@ class FilesPageState extends State<FilesPage> {
                       _loadContent();
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(t.successfullyMoved),
+                        const SnackBar(
+                          content: Text('Успешно перемещено'),
                           backgroundColor: Colors.green,
                         ),
                       );
@@ -1093,23 +1095,25 @@ class FilesPageState extends State<FilesPage> {
                 _buildBottomSheetItem(
                   icon: Icons.share_rounded,
                   color: Colors.green,
-                  title: t.share,
+                  title: 'Поделиться',
                   onTap: () {
                     Navigator.pop(ctx);
-                    _showShareDialog(fileIds: [file.id], folderIds: []);
+                    _showShareDialog(
+                        fileIds: [file.id], folderIds: []);
                   },
                 ),
                 _buildBottomSheetItem(
                   icon: Icons.delete_outline,
                   color: Colors.red,
-                  title: t.delete,
+                  title: 'Удалить',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showDeleteConfirmDialog(
                       itemName: file.name,
                       onConfirm: () async {
                         try {
-                          await _repo.deleteItem(type: 'file', id: file.id);
+                          await _repo.deleteItem(
+                              type: 'file', id: file.id);
                           if (!mounted) return;
                           _loadContent();
                         } on AppException catch (e) {
@@ -1138,20 +1142,20 @@ class FilesPageState extends State<FilesPage> {
   }) {
     final controller = TextEditingController(text: currentName);
     final cs = Theme.of(context).colorScheme;
-    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape:
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: cs.surface,
-        title: Text(t.rename, style: TextStyle(color: cs.onSurface)),
+        title:
+        Text('Переименовать', style: TextStyle(color: cs.onSurface)),
         content: TextField(
           controller: controller,
           autofocus: true,
           style: TextStyle(color: cs.onSurface),
           decoration: InputDecoration(
-            hintText: t.newNameHint,
+            hintText: 'Новое название',
             hintStyle:
             TextStyle(color: cs.onSurface.withValues(alpha: 0.4)),
             filled: true,
@@ -1162,14 +1166,15 @@ class FilesPageState extends State<FilesPage> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+              borderSide:
+              const BorderSide(color: Colors.blue, width: 1.5),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(t.cancel),
+            child: const Text('Отмена'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1186,8 +1191,8 @@ class FilesPageState extends State<FilesPage> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
-            child:
-            Text(t.save, style: const TextStyle(color: Colors.white)),
+            child: const Text('Сохранить',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1199,22 +1204,22 @@ class FilesPageState extends State<FilesPage> {
     required Future<void> Function() onConfirm,
   }) {
     final cs = Theme.of(context).colorScheme;
-    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape:
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: cs.surface,
-        title: Text(t.deleteConfirm, style: TextStyle(color: cs.onSurface)),
+        title: Text('Удалить?', style: TextStyle(color: cs.onSurface)),
         content: Text(
-          t.deleteConfirmMessage(itemName),
-          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
+          'Вы уверены, что хотите удалить «$itemName»?\nЭто действие необратимо.',
+          style:
+          TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(t.cancel),
+            child: const Text('Отмена'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1226,8 +1231,8 @@ class FilesPageState extends State<FilesPage> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
-            child:
-            Text(t.delete, style: const TextStyle(color: Colors.white)),
+            child: const Text('Удалить',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1273,8 +1278,7 @@ class FilesPageState extends State<FilesPage> {
                       else if (FavouritesProvider.instance.isLoading &&
                             _showFavourites)
                           const SliverFillRemaining(
-                            child:
-                            Center(child: CircularProgressIndicator()),
+                            child: Center(child: CircularProgressIndicator()),
                           )
                         else if (_showFavourites &&
                               FavouritesProvider
@@ -1288,10 +1292,7 @@ class FilesPageState extends State<FilesPage> {
                             else
                               SliverPadding(
                                 padding: const EdgeInsets.only(
-                                    left: 16,
-                                    right: 16,
-                                    top: 16,
-                                    bottom: 160),
+                                    left: 16, right: 16, top: 16, bottom: 160),
                                 sliver: _buildContent(),
                               ),
                     ],
@@ -1317,8 +1318,7 @@ class FilesPageState extends State<FilesPage> {
         onPressed: _openUploadPage,
         backgroundColor: Colors.blue,
         elevation: 4,
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: const Icon(Icons.cloud_upload_rounded,
             color: Colors.white, size: 26),
       ),
@@ -1354,7 +1354,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Widget _buildBottomActionBar() {
-    final t = AppLocalizations.of(context)!;
     final allSelected = _selectedFiles.length == _files.length &&
         _selectedFolders.length == _folders.length &&
         (_files.isNotEmpty || _folders.isNotEmpty);
@@ -1402,7 +1401,8 @@ class FilesPageState extends State<FilesPage> {
                   child: Row(
                     children: [
                       IconButton(
-                        icon: Icon(Icons.close, color: textColor, size: 24),
+                        icon:
+                        Icon(Icons.close, color: textColor, size: 24),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onPressed: () {
@@ -1414,8 +1414,7 @@ class FilesPageState extends State<FilesPage> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        t.selectedCount(_selectedFiles.length +
-                            _selectedFolders.length),
+                        'Выбрано: ${_selectedFiles.length + _selectedFolders.length}',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -1444,7 +1443,7 @@ class FilesPageState extends State<FilesPage> {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text(
-                          allSelected ? t.deselectAll : t.selectAll,
+                          allSelected ? 'Снять все' : 'Все',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -1469,12 +1468,12 @@ class FilesPageState extends State<FilesPage> {
                   children: [
                     _buildActionItem(
                       icon: Icons.star_rounded,
-                      label: t.favourite,
+                      label: 'Избранное',
                       iconColor: textColor,
                       textColor: textColor,
                       onTap: () {
-                        for (var f in _files.where(
-                                (e) => _selectedFiles.contains(e.id))) {
+                        for (var f in _files
+                            .where((e) => _selectedFiles.contains(e.id))) {
                           FavouritesProvider.instance.toggleFavourite(f);
                         }
                         setState(() {
@@ -1482,13 +1481,14 @@ class FilesPageState extends State<FilesPage> {
                           _selectedFolders.clear();
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(t.addedToFavourites)),
+                          const SnackBar(
+                              content: Text('Добавлено в избранное')),
                         );
                       },
                     ),
                     _buildActionItem(
                       icon: Icons.download_rounded,
-                      label: t.download,
+                      label: 'Скачать',
                       iconColor: textColor,
                       textColor: textColor,
                       onTap: () {
@@ -1505,7 +1505,7 @@ class FilesPageState extends State<FilesPage> {
                     ),
                     _buildActionItem(
                       icon: Icons.share_rounded,
-                      label: t.share,
+                      label: 'Поделиться',
                       iconColor: Colors.green,
                       textColor: textColor,
                       onTap: () {
@@ -1521,7 +1521,7 @@ class FilesPageState extends State<FilesPage> {
                     ),
                     _buildActionItem(
                       icon: Icons.drive_file_move_rounded,
-                      label: t.move,
+                      label: 'Переместить',
                       iconColor: textColor,
                       textColor: textColor,
                       onTap: () async {
@@ -1543,8 +1543,8 @@ class FilesPageState extends State<FilesPage> {
                           _loadContent();
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(t.successfullyMoved),
+                            const SnackBar(
+                              content: Text('Успешно перемещено'),
                               backgroundColor: Colors.green,
                             ),
                           );
@@ -1553,13 +1553,13 @@ class FilesPageState extends State<FilesPage> {
                     ),
                     _buildActionItem(
                       icon: Icons.delete_rounded,
-                      label: t.delete,
+                      label: 'Удалить',
                       iconColor: Colors.red.shade400,
                       textColor: textColor,
                       onTap: () {
                         _showDeleteConfirmDialog(
-                          itemName: t.deleteItems(_selectedFiles.length +
-                              _selectedFolders.length),
+                          itemName:
+                          '${_selectedFiles.length + _selectedFolders.length} элементов',
                           onConfirm: () async {
                             setState(() => _isLoading = true);
                             try {
@@ -1598,7 +1598,6 @@ class FilesPageState extends State<FilesPage> {
 
   Widget _buildAppBar() {
     final cs = Theme.of(context).colorScheme;
-    final t = AppLocalizations.of(context)!;
     return SliverAppBar(
       expandedHeight: 60,
       floating: false,
@@ -1609,7 +1608,7 @@ class FilesPageState extends State<FilesPage> {
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.only(left: 20, bottom: 14),
         title: Text(
-          t.files,
+          'Файлы',
           style: TextStyle(
             color: cs.onSurface,
             fontWeight: FontWeight.bold,
@@ -1630,7 +1629,7 @@ class FilesPageState extends State<FilesPage> {
             _showFavourites = !_showFavourites;
             _activeFilter = _FilterType.all;
           }),
-          tooltip: t.favourites,
+          tooltip: 'Избранное',
         ),
         IconButton(
           icon: Icon(_isGrid ? Icons.view_list : Icons.grid_view,
@@ -1640,7 +1639,6 @@ class FilesPageState extends State<FilesPage> {
         IconButton(
           icon: Icon(Icons.refresh, color: cs.onSurface),
           onPressed: _loadContent,
-          tooltip: t.refresh,
         ),
         const SizedBox(width: 4),
       ],
@@ -1648,7 +1646,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Widget _buildBreadcrumb() {
-    final t = AppLocalizations.of(context)!;
     return Container(
       color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1682,7 +1679,7 @@ class FilesPageState extends State<FilesPage> {
                             : Colors.grey),
                     const SizedBox(width: 4),
                     Text(
-                      t.home_breadcrumb,
+                      'Главная',
                       style: TextStyle(
                         color: _breadcrumb.isEmpty && !_showFavourites
                             ? Colors.blue
@@ -1708,13 +1705,13 @@ class FilesPageState extends State<FilesPage> {
                   color: Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(Icons.star_rounded,
+                    Icon(Icons.star_rounded,
                         size: 14, color: Colors.amber),
-                    const SizedBox(width: 4),
-                    Text(t.favourites_breadcrumb,
-                        style: const TextStyle(
+                    SizedBox(width: 4),
+                    Text('Избранное',
+                        style: TextStyle(
                           color: Colors.amber,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
@@ -1759,7 +1756,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Future<void> _startDownload(FileModel file) async {
-    final t = AppLocalizations.of(context)!;
     if (_downloadProgress.containsKey(file.id)) return;
     setState(() {
       _downloadProgress[file.id] = 0.0;
@@ -1786,7 +1782,7 @@ class FilesPageState extends State<FilesPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(t.fileSaved(file.name)),
+          content: Text('Файл сохранён: ${file.name}'),
           backgroundColor: Colors.green,
         ),
       );
@@ -1819,7 +1815,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Widget _buildContent() {
-    final t = AppLocalizations.of(context)!;
     return SliverList(
       delegate: SliverChildListDelegate([
         if (_showFavourites) ...[
@@ -1829,7 +1824,7 @@ class FilesPageState extends State<FilesPage> {
                   color: Colors.amber, size: 18),
               const SizedBox(width: 6),
               Text(
-                t.favourites_breadcrumb,
+                'Избранное',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
@@ -1875,10 +1870,10 @@ class FilesPageState extends State<FilesPage> {
                       const SizedBox(width: 4),
                       Text(
                         _activeFilter == _FilterType.images
-                            ? t.photos
+                            ? 'Фото'
                             : _activeFilter == _FilterType.videos
-                            ? t.videos
-                            : t.filter,
+                            ? 'Видео'
+                            : 'Фильтр',
                         style: TextStyle(
                           fontSize: 12,
                           color: _activeFilter != _FilterType.all
@@ -1896,7 +1891,7 @@ class FilesPageState extends State<FilesPage> {
           const SizedBox(height: 12),
         ],
         if (_displayFolders.isNotEmpty) ...[
-          _buildSectionHeader(t.folders, Icons.folder_rounded,
+          _buildSectionHeader('Папки', Icons.folder_rounded,
               _displayFolders.length,
               trailing: IconButton(
                 icon: const Icon(Icons.create_new_folder_outlined,
@@ -1914,7 +1909,7 @@ class FilesPageState extends State<FilesPage> {
           const SizedBox(height: 20),
         ],
         if (_displayFolders.isEmpty && !_showFavourites) ...[
-          _buildSectionHeader(t.folders, Icons.folder_rounded, 0,
+          _buildSectionHeader('Папки', Icons.folder_rounded, 0,
               trailing: IconButton(
                 icon: const Icon(Icons.create_new_folder_outlined,
                     color: Colors.blue, size: 24),
@@ -1931,7 +1926,7 @@ class FilesPageState extends State<FilesPage> {
         if (_displayFiles.isNotEmpty) ...[
           if (!_showFavourites)
             _buildSectionHeader(
-                t.files, Icons.insert_drive_file, _totalFilesCount),
+                'Файлы', Icons.insert_drive_file, _totalFilesCount),
           const SizedBox(height: 8),
           if (_isGrid && !_showFavourites)
             _buildFilesGrid()
@@ -1950,7 +1945,6 @@ class FilesPageState extends State<FilesPage> {
   Widget _buildPinnedFolders() {
     if (_pinnedFolders.isEmpty) return const SizedBox.shrink();
     final cs = Theme.of(context).colorScheme;
-    final t = AppLocalizations.of(context)!;
     return SizedBox(
       height: 44,
       child: ListView.builder(
@@ -1969,23 +1963,24 @@ class FilesPageState extends State<FilesPage> {
                 context: context,
                 builder: (_) => AlertDialog(
                   backgroundColor: cs.surface,
-                  title: Text(t.unpinFolder,
+                  title: Text('Открепить папку?',
                       style: TextStyle(color: cs.onSurface)),
                   content: Text(folder.name,
                       style: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.7))),
+                          color:
+                          cs.onSurface.withValues(alpha: 0.7))),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text(t.cancel),
+                      child: const Text('Отмена'),
                     ),
                     TextButton(
                       onPressed: () {
                         Navigator.pop(context);
                         _unpinFolder(pinId);
                       },
-                      child: Text(t.unpin,
-                          style: const TextStyle(color: Colors.red)),
+                      child: const Text('Открепить',
+                          style: TextStyle(color: Colors.red)),
                     ),
                   ],
                 ),
@@ -2226,7 +2221,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Widget _buildError() {
-    final t = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -2246,7 +2240,7 @@ class FilesPageState extends State<FilesPage> {
           ElevatedButton.icon(
             onPressed: _loadContent,
             icon: const Icon(Icons.refresh),
-            label: Text(t.retry),
+            label: const Text('Повторить'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
               foregroundColor: Colors.white,
@@ -2260,7 +2254,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Widget _buildEmpty() {
-    final t = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -2277,7 +2270,7 @@ class FilesPageState extends State<FilesPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            t.emptyFolder,
+            'Здесь пока пусто',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -2286,7 +2279,7 @@ class FilesPageState extends State<FilesPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            t.emptyFolderSubtitle,
+            'Создайте папку или загрузите фото / видео',
             style: TextStyle(
               color: Theme.of(context)
                   .colorScheme
@@ -2308,8 +2301,8 @@ class FilesPageState extends State<FilesPage> {
                     icon: const Icon(
                         Icons.create_new_folder_rounded,
                         color: Colors.blue),
-                    label: Text(t.createFolder,
-                        style: const TextStyle(
+                    label: const Text('Создать папку',
+                        style: TextStyle(
                           color: Colors.blue,
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -2331,8 +2324,8 @@ class FilesPageState extends State<FilesPage> {
                     onPressed: _pickAndUploadFiles,
                     icon: const Icon(Icons.cloud_upload_rounded,
                         color: Colors.white),
-                    label: Text(t.uploadFiles,
-                        style: const TextStyle(
+                    label: const Text('Загрузить файлы',
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -2356,7 +2349,6 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Widget _buildEmptyFavourites() {
-    final t = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -2373,7 +2365,7 @@ class FilesPageState extends State<FilesPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            t.noFavourites,
+            'Нет избранных файлов',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -2382,7 +2374,7 @@ class FilesPageState extends State<FilesPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            t.noFavouritesSubtitle,
+            'Нажмите ★ на файле чтобы добавить',
             style: TextStyle(
                 color: Theme.of(context)
                     .colorScheme
@@ -3010,8 +3002,7 @@ class _FileGridCard extends StatelessWidget {
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color:
-                          Colors.black.withValues(alpha: 0.5),
+                          color: Colors.black.withValues(alpha: 0.5),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.play_arrow_rounded,
@@ -3149,17 +3140,10 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
   Future<void> _load() async {
     try {
       final data = await widget.fetchInfo();
-      if (mounted)
-        setState(() {
-          _info = data;
-          _isLoading = false;
-        });
+      if (mounted) setState(() { _info = data; _isLoading = false; });
     } catch (e) {
       if (mounted)
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
+        setState(() { _error = e.toString(); _isLoading = false; });
     }
   }
 
@@ -3182,7 +3166,6 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final t = AppLocalizations.of(context)!;
     final isFolder = widget.type == 'folder';
 
     return Container(
@@ -3197,6 +3180,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Handle
             Center(
               child: Container(
                 width: 40,
@@ -3208,8 +3192,9 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
                 ),
               ),
             ),
+            // Title
             Text(
-              isFolder ? t.folderDetails : t.fileDetails,
+              isFolder ? 'Сведения о папке' : 'Сведения о файле',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -3217,6 +3202,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
               ),
             ),
             const SizedBox(height: 16),
+            // Header card
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -3282,6 +3268,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
               ),
             ),
             const SizedBox(height: 20),
+            // Content
             if (_isLoading)
               const Center(child: CircularProgressIndicator())
             else if (_error != null)
@@ -3294,8 +3281,8 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
               )
             else if (_info != null)
                 isFolder
-                    ? _buildFolderInfo(cs, t)
-                    : _buildFileInfo(cs, t),
+                    ? _buildFolderInfo(cs)
+                    : _buildFileInfo(cs),
             const SizedBox(height: 8),
           ],
         ),
@@ -3315,7 +3302,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
     );
   }
 
-  Widget _buildFileInfo(ColorScheme cs, AppLocalizations t) {
+  Widget _buildFileInfo(ColorScheme cs) {
     return Column(
       children: [
         Row(
@@ -3323,7 +3310,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.fileName,
+                label: 'Название',
                 value: _info!['name'] ?? widget.name,
               ),
             ),
@@ -3331,7 +3318,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.fileSize,
+                label: 'Размер',
                 value: widget.fmt(_info!['size']),
               ),
             ),
@@ -3343,7 +3330,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.createdAt,
+                label: 'Дата создания',
                 value: _formatDate(_info!['created_at']),
               ),
             ),
@@ -3351,7 +3338,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.capturedAt,
+                label: 'Снято в',
                 value: _formatDate(_info!['captured_at']),
               ),
             ),
@@ -3361,7 +3348,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
     );
   }
 
-  Widget _buildFolderInfo(ColorScheme cs, AppLocalizations t) {
+  Widget _buildFolderInfo(ColorScheme cs) {
     return Column(
       children: [
         Row(
@@ -3369,7 +3356,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.fileName,
+                label: 'Название',
                 value: _info!['name'] ?? widget.name,
               ),
             ),
@@ -3377,7 +3364,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.totalSize,
+                label: 'Общий размер',
                 value: widget.fmt(_info!['total_size']),
               ),
             ),
@@ -3389,7 +3376,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.folderCount,
+                label: 'Папки',
                 value: '${_info!['folder_count'] ?? 0}',
               ),
             ),
@@ -3397,7 +3384,7 @@ class _InfoBottomSheetState extends State<_InfoBottomSheet> {
             Expanded(
               child: _InfoTile(
                 cs: cs,
-                label: t.fileCount,
+                label: 'Файлы',
                 value: '${_info!['file_count'] ?? 0}',
               ),
             ),

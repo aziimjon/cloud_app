@@ -95,7 +95,54 @@ class ShareRepositoryImpl implements ShareRepository {
       int userId, String folderId) async {
     try {
       return await _remoteDataSource.getSharedWithMeUserFolder(
-          userId, folderId);
+        userId,
+        folderId,
+      );
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // ================= NEW SHARE REQUEST METHODS =================
+
+  @override
+  Future<ShareRequestListModel> createShareRequest(
+      ShareRequestCreateModel body) async {
+    try {
+      return await _remoteDataSource.createShareRequest(body);
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  @override
+  Future<List<ShareRequestListModel>> getShareRequests() async {
+    try {
+      return await _remoteDataSource.getShareRequests();
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  @override
+  Future<ShareRequestDetailModel> getShareRequestDetail(int id) async {
+    try {
+      return await _remoteDataSource.getShareRequestDetail(id);
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  @override
+  Future<ShareRequestPermission> updatePermissionStatus({
+    required int permissionId,
+    required String status,
+  }) async {
+    try {
+      return await _remoteDataSource.updatePermissionStatus(
+        permissionId: permissionId,
+        status: status,
+      );
     } catch (e) {
       throw Exception(e.toString());
     }

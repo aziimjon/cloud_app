@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/config/app_config.dart';
+import 'core/services/language_notifier.dart';
 import 'features/auth/presentation/splash_page.dart';
+import 'l10n/app_localizations.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  ThemeNotifier — global singleton, no Provider needed
@@ -125,6 +128,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.initialize(Environment.dev);
   await ThemeNotifier.instance.init();
+  await LanguageNotifier.instance.init();
   runApp(const CloudApp());
 }
 
@@ -134,13 +138,29 @@ class CloudApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: ThemeNotifier.instance,
+      listenable: Listenable.merge([ThemeNotifier.instance, LanguageNotifier.instance]),
       builder: (context, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
+          title: 'MyCloud',
           theme: _lightTheme,
           darkTheme: _darkTheme,
           themeMode: ThemeNotifier.instance.mode,
+          
+          // 🌐 Localization configuration
+          locale: LanguageNotifier.instance.locale,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('en'), // English
+            Locale('ru'), // Russian
+            Locale('uz'), // Uzbek
+          ],
+          
           home: const SplashPage(),
         );
       },

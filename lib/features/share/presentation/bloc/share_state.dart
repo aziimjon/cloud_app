@@ -70,3 +70,41 @@ class ShareError extends ShareState {
   @override
   List<Object?> get props => [message];
 }
+
+// ================= NEW SHARE REQUEST STATES =================
+
+class ShareRequestCreated extends ShareState {
+  final ShareRequestListModel request;
+
+  const ShareRequestCreated({required this.request});
+
+  @override
+  List<Object?> get props => [request.id, request.link];
+}
+
+class ShareRequestsLoaded extends ShareState {
+  final List<ShareRequestListModel> requests;
+
+  const ShareRequestsLoaded({required this.requests});
+
+  @override
+  List<Object?> get props => [requests];
+}
+
+class ShareRequestDetailLoaded extends ShareState {
+  final ShareRequestDetailModel detail;
+
+  const ShareRequestDetailLoaded({required this.detail});
+
+  @override
+  List<Object?> get props => [detail.id];
+}
+
+class PermissionStatusUpdated extends ShareState {
+  final ShareRequestPermission permission;
+
+  const PermissionStatusUpdated({required this.permission});
+
+  @override
+  List<Object?> get props => [permission.id, permission.status];
+}

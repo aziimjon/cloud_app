@@ -1,0 +1,209 @@
+{
+  "@@locale": "ru",
+  "appName": "MyCloud",
+  "welcomeBack": "С возвращением,",
+  "home": "Главная",
+  "files": "Файлы",
+  "shared": "Общие",
+  "profile": "Профиль",
+  "recent": "Недавние",
+  "myCloudStorage": "My Cloud Storage",
+  "yourCloudStorage": "Ваше облачное хранилище",
+  "used": "использовано",
+  "total": "всего",
+  "quickActions": "Быстрые действия",
+  "myFiles": "Мои файлы",
+  "favourites": "Избранное",
+  "overallStats": "Общая статистика",
+  "images": "Изображения",
+  "videos": "Видео",
+  "sharedByMe": "Поделился я",
+  "sharedWithMe": "Со мной",
+  "participants": "участн.",
+  "folders": "Папки",
+  "folder": "Папка",
+  "createFolder": "Создать папку",
+  "newFolder": "Новая папка",
+  "folderName": "Название папки",
+  "cancel": "Отмена",
+  "create": "Создать",
+  "save": "Сохранить",
+  "delete": "Удалить",
+  "rename": "Переименовать",
+  "move": "Переместить",
+  "download": "Скачать",
+  "share": "Поделиться",
+  "preview": "Предпросмотр",
+  "details": "Посмотреть детали",
+  "open": "Открыть",
+  "addToFavourites": "В избранное",
+  "removeFromFavourites": "Убрать из избранного",
+  "deleteConfirm": "Удалить?",
+  "deleteConfirmMessage": "Вы уверены, что хотите удалить «{name}»?\nЭто действие необратимо.",
+  "@deleteConfirmMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "successfullyMoved": "Успешно перемещено",
+  "fileSaved": "Файл сохранён: {name}",
+  "@fileSaved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyFolder": "Здесь пока пусто",
+  "emptyFolderSubtitle": "Создайте папку или загрузите фото / видео",
+  "noFavourites": "Нет избранных файлов",
+  "noFavouritesSubtitle": "Нажмите звезду на файле чтобы добавить",
+  "filter": "Фильтр",
+  "all": "Все",
+  "photos": "Фото",
+  "pinnedFolders": "Закреплённые папки",
+  "maxPinnedFolders": "Максимум 5 закреплённых папок",
+  "alreadyPinned": "Папка уже закреплена",
+  "pin": "Закрепить",
+  "unpin": "Открепить",
+  "unpinFolder": "Открепить папку?",
+  "shareViaLink": "Share via link",
+  "shareByPhone": "По номеру",
+  "shareByLink": "По ссылке",
+  "linkName": "Link name",
+  "generate": "Generate",
+  "generatedLink": "Generated link",
+  "linkCopied": "Ссылка скопирована",
+  "copy": "Скопировать",
+  "copyLink": "Скопировать ссылку",
+  "shareSuccess": "Поделились успешно",
+  "addAtLeastOnePhone": "Добавьте хотя бы один номер телефона",
+  "enter9Digits": "Введите 9 цифр номера",
+  "enterLinkName": "Введите название ссылки",
+  "fileDetails": "Сведения о файле",
+  "folderDetails": "Сведения о папке",
+  "fileName": "Название",
+  "fileSize": "Размер",
+  "createdAt": "Дата создания",
+  "capturedAt": "Снято в",
+  "totalSize": "Общий размер",
+  "fileCount": "Файлы",
+  "folderCount": "Папки",
+  "shareRequests": "Share Requests",
+  "shareRequestsSubtitle": "Управление ссылками и доступами",
+  "shareRequestDetails": "Share request details",
+  "request": "Request",
+  "linkNameLabel": "LINK NAME",
+  "shareLinkLabel": "SHARE LINK",
+  "permissionRequests": "PERMISSION REQUESTS",
+  "pending": "Pending",
+  "approved": "Approved",
+  "rejected": "Rejected",
+  "review": "Review",
+  "reviewAccessRequest": "Review access request",
+  "reviewAccessRequestSubtitle": "Choose whether this user should get access.",
+  "reject": "Reject",
+  "approve": "Approve",
+  "accessApproved": "Доступ одобрен",
+  "accessRejected": "Доступ отклонён",
+  "noShareRequests": "Нет share requests",
+  "noShareRequestsSubtitle": "Поделитесь файлами по ссылке и они появятся здесь",
+  "personalData": "ЛИЧНЫЕ ДАННЫЕ",
+  "changeName": "Изменить имя",
+  "changePhone": "Изменить телефон",
+  "changePassword": "Изменить пароль",
+  "newName": "Новое имя",
+  "newPhone": "Новый номер",
+  "oldPassword": "Старый пароль",
+  "newPassword": "Новый пароль",
+  "confirmPassword": "Подтвердить пароль",
+  "passwordsDoNotMatch": "Пароли не совпадают",
+  "passwordTooShort": "Минимум 8 символов",
+  "nameUpdated": "Имя обновлено",
+  "phoneUpdated": "Телефон обновлён",
+  "passwordChanged": "Пароль изменён",
+  "avatarUpdated": "Аватар обновлён",
+  "storage": "Хранилище",
+  "language": "Язык",
+  "theme": "ОФОРМЛЕНИЕ",
+  "light": "Светлая",
+  "dark": "Тёмная",
+  "logout": "Выйти из аккаунта",
+  "logoutConfirm": "Выход",
+  "logoutConfirmMessage": "Вы уверены, что хотите выйти из аккаунта?",
+  "refresh": "Обновить",
+  "retry": "Повторить",
+  "selected": "Выбрано: {count}",
+  "@selected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectAll": "Все",
+  "deselectAll": "Снять все",
+  "uploadFiles": "Загрузить файлы",
+  "chooseLanguage": "Выберите язык",
+  "home_breadcrumb": "Главная",
+  "favourites_breadcrumb": "Избранное",
+  "selectedCount": "Выбрано: {count}",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addedToFavourites": "Добавлено в избранное",
+  "couldNotOpenImage": "Не удалось открыть изображение",
+  "couldNotOpenVideo": "Не удалось открыть видео",
+  "noSharedWithMe": "Никто не делился файлами",
+  "noSharedWithMeSubtitle": "Когда кто-то поделится файлом — они появятся здесь",
+  "noSharedByMe": "Вы ещё ни с кем не делились",
+  "noSharedByMeSubtitle": "Нажмите кнопку шаринга чтобы поделиться файлами",
+  "noSharedItems": "Нет расшаренных элементов",
+  "sharedWithLabel": "Для {name}",
+  "@sharedWithLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "revokeAccess": "Отозвать доступ",
+  "revokeAccessConfirm": "Отозвать доступ к «{name}»?",
+  "@revokeAccessConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "revoke": "Отозвать",
+  "filesCount": "{count} файлов",
+  "@filesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "openLabel": "Открыть",
+  "usersTab": "Пользователи",
+  "sharedItemsTab": "Расшаренные",
+  "newNameHint": "Новое название",
+  "deleteItems": "{count} элементов",
+  "@deleteItems": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pinLabel": "📌 Закрепить",
+  "unpinLabel": "📌 Открепить",
+  "favourite": "Избранное"
+}

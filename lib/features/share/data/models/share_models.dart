@@ -282,3 +282,165 @@ class RevokeShareRequestModel {
         if (phoneNumbers.isNotEmpty) 'phone_numbers': phoneNumbers,
       };
 }
+// ── Share Request models ──────────────────────────────────────────────────────
+
+class ShareRequestOwner {
+  final int id;
+  final String fullName;
+  final String phoneNumber;
+
+  const ShareRequestOwner({
+    required this.id,
+    required this.fullName,
+    required this.phoneNumber,
+  });
+
+  factory ShareRequestOwner.fromJson(Map<String, dynamic> json) =>
+      ShareRequestOwner(
+        id: json['id'] as int? ?? 0,
+        fullName: json['full_name'] as String? ?? '',
+        phoneNumber: json['phone_number'] as String? ?? '',
+      );
+}
+
+class ShareRequestListModel {
+  final int id;
+  final String name;
+  final ShareRequestOwner owner;
+  final String link;
+
+  const ShareRequestListModel({
+    required this.id,
+    required this.name,
+    required this.owner,
+    required this.link,
+  });
+
+  factory ShareRequestListModel.fromJson(Map<String, dynamic> json) =>
+      ShareRequestListModel(
+        id: json['id'] as int? ?? 0,
+        name: json['name'] as String? ?? '',
+        owner: ShareRequestOwner.fromJson(
+            json['owner'] as Map<String, dynamic>? ?? {}),
+        link: json['link'] as String? ?? '',
+      );
+}
+
+class ShareRequestFileModel {
+  final String id;
+  final String name;
+  final String mimeType;
+  final int size;
+  final String? thumbnailPath;
+
+  const ShareRequestFileModel({
+    required this.id,
+    required this.name,
+    required this.mimeType,
+    required this.size,
+    this.thumbnailPath,
+  });
+
+  factory ShareRequestFileModel.fromJson(Map<String, dynamic> json) =>
+      ShareRequestFileModel(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        mimeType: json['mime_type'] as String? ?? '',
+        size: json['size'] as int? ?? 0,
+        thumbnailPath: json['thumbnail_path'] as String?,
+      );
+}
+
+class ShareRequestItem {
+  final int id;
+  final ShareRequestFileModel? file;
+  final Map<String, dynamic>? folder;
+
+  const ShareRequestItem({
+    required this.id,
+    this.file,
+    this.folder,
+  });
+
+  factory ShareRequestItem.fromJson(Map<String, dynamic> json) =>
+      ShareRequestItem(
+        id: json['id'] as int? ?? 0,
+        file: json['file'] != null
+            ? ShareRequestFileModel.fromJson(
+            json['file'] as Map<String, dynamic>)
+            : null,
+        folder: json['folder'] as Map<String, dynamic>?,
+      );
+}
+
+class ShareRequestPermission {
+  final int id;
+  final ShareRequestOwner requester;
+  final String status; // 'pending' | 'approved' | 'rejected'
+
+  const ShareRequestPermission({
+    required this.id,
+    required this.requester,
+    required this.status,
+  });
+
+  factory ShareRequestPermission.fromJson(Map<String, dynamic> json) =>
+      ShareRequestPermission(
+        id: json['id'] as int? ?? 0,
+        requester: ShareRequestOwner.fromJson(
+            json['requester'] as Map<String, dynamic>? ?? {}),
+        status: json['status'] as String? ?? 'pending',
+      );
+}
+
+class ShareRequestDetailModel {
+  final int id;
+  final String name;
+  final String link;
+  final ShareRequestOwner owner;
+  final List<ShareRequestItem> items;
+  final List<ShareRequestPermission> permissions;
+
+  const ShareRequestDetailModel({
+    required this.id,
+    required this.name,
+    required this.link,
+    required this.owner,
+    required this.items,
+    required this.permissions,
+  });
+
+  factory ShareRequestDetailModel.fromJson(Map<String, dynamic> json) =>
+      ShareRequestDetailModel(
+        id: json['id'] as int? ?? 0,
+        name: json['name'] as String? ?? '',
+        link: json['link'] as String? ?? '',
+        owner: ShareRequestOwner.fromJson(
+            json['owner'] as Map<String, dynamic>? ?? {}),
+        items: (json['items'] as List<dynamic>? ?? [])
+            .map((e) => ShareRequestItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        permissions: (json['permissions'] as List<dynamic>? ?? [])
+            .map((e) =>
+            ShareRequestPermission.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class ShareRequestCreateModel {
+  final String name;
+  final List<String> files;
+  final List<String> folders;
+
+  const ShareRequestCreateModel({
+    required this.name,
+    this.files = const [],
+    this.folders = const [],
+  });
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'files': files,
+    'folders': folders,
+  };
+}

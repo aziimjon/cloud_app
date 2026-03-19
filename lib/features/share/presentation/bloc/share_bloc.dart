@@ -3,7 +3,6 @@ import '../../data/repository/share_repository.dart';
 import 'share_event.dart';
 import 'share_state.dart';
 
-/// BLoC for share feature — handles 9 events mapping to Swagger endpoints.
 class ShareBloc extends Bloc<ShareEvent, ShareState> {
   final ShareRepository _repository;
 
@@ -17,6 +16,11 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
     on<LoadSharedWithMe>(_onLoadSharedWithMe);
     on<LoadSharedWithMeUser>(_onLoadSharedWithMeUser);
     on<LoadSharedWithMeUserFolder>(_onLoadSharedWithMeUserFolder);
+    // ── новые ──
+    on<CreateShareRequestEvent>(_onCreateShareRequest);
+    on<LoadShareRequests>(_onLoadShareRequests);
+    on<LoadShareRequestDetail>(_onLoadShareRequestDetail);
+    on<UpdatePermissionStatus>(_onUpdatePermissionStatus);
   }
 
   Future<void> _onLoadSharedByMe(
@@ -119,6 +123,52 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
       final response = await _repository.getSharedWithMeUserFolder(
           event.userId, event.folderId);
       emit(SharedUserFilesLoaded(response: response));
+    } catch (e) {
+      emit(ShareError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onCreateShareRequest(
+      CreateShareRequestEvent event, Emitter<ShareState> emit) async {
+    emit(const ShareLoading());
+    try {
+      final request = await _repository.createShareRequest(event.body);
+      emit(ShareRequestCreated(request: request));
+    } catch (e) {
+      emit(ShareError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onLoadShareRequests(
+      LoadShareRequests event, Emitter<ShareState> emit) async {
+    emit(const ShareLoading());
+    try {
+      final requests = await _repository.getShareRequests();
+      emit(ShareRequestsLoaded(requests: requests));
+    } catch (e) {
+      emit(ShareError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onLoadShareRequestDetail(
+      LoadShareRequestDetail event, Emitter<ShareState> emit) async {
+    emit(const ShareLoading());
+    try {
+      final detail = await _repository.getShareRequestDetail(event.id);
+      emit(ShareRequestDetailLoaded(detail: detail));
+    } catch (e) {
+      emit(ShareError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onUpdatePermissionStatus(
+      UpdatePermissionStatus event, Emitter<ShareState> emit) async {
+    try {
+      final permission = await _repository.updatePermissionStatus(
+        permissionId: event.permissionId,
+        status: event.status,
+      );
+      emit(PermissionStatusUpdated(permission: permission));
     } catch (e) {
       emit(ShareError(message: e.toString()));
     }

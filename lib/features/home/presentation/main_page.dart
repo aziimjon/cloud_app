@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_app/l10n/app_localizations.dart';
 import 'home_page.dart';
 import 'files_page.dart';
 import 'shared_page.dart';
@@ -32,6 +33,8 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: PopScope(
@@ -55,9 +58,9 @@ class _MainPageState extends State<MainPage> {
               now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
             _lastBackPress = now;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Нажмите ещё раз для выхода'),
-                duration: Duration(seconds: 2),
+              SnackBar(
+                content: Text(t.logoutConfirmMessage),
+                duration: const Duration(seconds: 2),
               ),
             );
             return;
@@ -116,6 +119,8 @@ class _MainPageState extends State<MainPage> {
 
   Widget _buildBottomNav() {
     final cs = Theme.of(context).colorScheme;
+    final t = AppLocalizations.of(context)!;
+    
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
@@ -135,14 +140,14 @@ class _MainPageState extends State<MainPage> {
             children: [
               _NavItem(
                 icon: Icons.home_rounded,
-                label: 'Home',
+                label: t.home,
                 index: 0,
                 current: _currentIndex,
                 onTap: (i) => setState(() => _currentIndex = i),
               ),
               _NavItem(
                 icon: Icons.access_time_rounded,
-                label: 'Recent',
+                label: t.recent,
                 index: 1,
                 current: _currentIndex,
                 onTap: (i) {
@@ -159,14 +164,14 @@ class _MainPageState extends State<MainPage> {
               ),
               _NavItem(
                 icon: Icons.people_rounded,
-                label: 'Shared',
+                label: t.shared,
                 index: 3,
                 current: _currentIndex,
                 onTap: (i) => setState(() => _currentIndex = i),
               ),
               _NavItem(
                 icon: Icons.person_rounded,
-                label: 'Profile',
+                label: t.profile,
                 index: 4,
                 current: _currentIndex,
                 onTap: (i) => setState(() => _currentIndex = i),
@@ -272,4 +277,3 @@ class _UploadButton extends StatelessWidget {
     );
   }
 }
-
