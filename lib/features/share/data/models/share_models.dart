@@ -1,3 +1,5 @@
+import 'package:cloud_app/core/config/app_config.dart';
+
 // Share feature models — strictly matching Swagger definitions.
 
 class UserModel {
@@ -52,8 +54,9 @@ class FileModel {
   });
 
   factory FileModel.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'] ?? json['uuid'] ?? json['file_id'] ?? json['file_uuid'];
     return FileModel(
-      id: json['id'] as String? ?? '',
+      id: rawId?.toString() ?? '',
       name: json['name'] as String? ?? '',
       owner: UserModel.fromJson(json['owner'] as Map<String, dynamic>? ?? {}),
       size: json['size'] as int?,
@@ -62,7 +65,7 @@ class FileModel {
       uploadStatus: json['upload_status'] as String?,
       createdAt: json['created_at'] as String?,
       isFavourite: json['is_favourite'] as bool? ?? false,
-      thumbnailPath: json['thumbnail_path'] as String? ?? '',
+      thumbnailPath: _normalizeUrl(json['thumbnail_path'] as String?) ?? '',
     );
   }
 
@@ -78,6 +81,29 @@ class FileModel {
         'is_favourite': isFavourite,
         'thumbnail_path': thumbnailPath,
       };
+
+  static String? _normalizeUrl(String? raw) {
+    if (raw == null || raw.isEmpty) return raw;
+    final uri = Uri.tryParse(raw);
+    if (uri != null && uri.hasScheme) return raw;
+
+    final base = Uri.parse(AppConfig.instance.baseUrl);
+    final origin = base.replace(path: '/', query: '', fragment: '');
+
+    if (raw.startsWith('/media/') || raw.startsWith('/static/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/api/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/content/')) {
+      return base.resolve(raw.substring(1)).toString();
+    }
+    if (raw.startsWith('/')) {
+      return origin.resolve(raw).toString();
+    }
+    return base.resolve(raw).toString();
+  }
 }
 
 class FolderModel {

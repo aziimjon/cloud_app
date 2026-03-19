@@ -89,9 +89,35 @@ class ProfileRepository {
     }
   }
 
+  Future<Map<String, dynamic>> getContentStatistics() async {
+    try {
+      final r = await _dio.get('/content/statistics/');
+      return r.data is Map<String, dynamic> ? r.data : {};
+    } on DioException catch (e) {
+      throw AppException(
+        message: _extractError(e.response?.data),
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> getContentInfo({
+    required String id,
+    required String type,
+  }) async {
+    try {
+      final r = await _dio.post('/content/info/', data: {'id': id, 'type': type});
+      return r.data is Map<String, dynamic> ? r.data : {};
+    } on DioException catch (e) {
+      throw AppException(
+        message: _extractError(e.response?.data),
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
   Future<void> uploadAvatar(File imageFile) async {
     try {
-      // Сначала получаем ID пользователя
       final me = await getMe();
       final userId = me['id']?.toString();
       if (userId == null) {

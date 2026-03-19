@@ -25,6 +25,7 @@ class HomePage extends StatefulWidget {
 class HomePageState extends State<HomePage> {
   final _profileRepo = ProfileRepository();
   Map<String, dynamic> _storageData = {};
+  Map<String, dynamic> _statsData = {};
   String? _userName;
   bool _isLoading = true;
 
@@ -37,11 +38,15 @@ class HomePageState extends State<HomePage> {
   Future<void> _loadData() async {
     final name = await SecureStorage.getFullName();
     try {
-      final data = await _profileRepo.getStorageUsed();
+      final results = await Future.wait([
+        _profileRepo.getStorageUsed(),
+        _profileRepo.getContentStatistics(),
+      ]);
       if (mounted) {
         setState(() {
           _userName = name;
-          _storageData = data;
+          _storageData = results[0];
+          _statsData = results[1];
           _isLoading = false;
         });
       }
@@ -73,7 +78,6 @@ class HomePageState extends State<HomePage> {
           onRefresh: _loadData,
           child: CustomScrollView(
             slivers: [
-              // AppBar с приветствием и кнопкой темы
               SliverAppBar(
                 expandedHeight: 120,
                 floating: false,
@@ -127,24 +131,25 @@ class HomePageState extends State<HomePage> {
                 ],
               ),
 
-              // Контент
               SliverToBoxAdapter(
                 child: _isLoading
                     ? const Padding(
-                        padding: EdgeInsets.only(top: 40),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
+                  padding: EdgeInsets.only(top: 40),
+                  child: Center(child: CircularProgressIndicator()),
+                )
                     : Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildStorageCard(cs),
-                            const SizedBox(height: 24),
-                            _buildQuickActions(context),
-                          ],
-                        ),
-                      ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildStorageCard(cs),
+                      const SizedBox(height: 24),
+                      _buildStatisticsSection(cs),
+                      const SizedBox(height: 24),
+                      _buildQuickActions(context),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -195,18 +200,11 @@ class HomePageState extends State<HomePage> {
                 children: [
                   Text(
                     'My Cloud Storage',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   Text(
                     'Ваше облачное хранилище',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
@@ -241,6 +239,75 @@ class HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildStatisticsSection(ColorScheme cs) {
+    final image = _statsData['image'] as Map<String, dynamic>? ?? {};
+    final video = _statsData['video'] as Map<String, dynamic>? ?? {};
+    final sharedByMe = _statsData['shared_by_me'] as Map<String, dynamic>? ?? {};
+    final sharedWithMe = _statsData['shared_with_me'] as Map<String, dynamic>? ?? {};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Общая статистика',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                icon: Icons.image_rounded,
+                iconColor: const Color(0xFF1A73E8),
+                label: 'Изображения',
+                count: '${image['count'] ?? 0}',
+                subtitle: _fmt(image['size']),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.videocam_rounded,
+                iconColor: const Color(0xFFE53935),
+                label: 'Видео',
+                count: '${video['count'] ?? 0}',
+                subtitle: _fmt(video['size']),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                icon: Icons.share_rounded,
+                iconColor: Colors.green,
+                label: 'Поделился я',
+                count: '${(sharedByMe['files'] ?? 0) + (sharedByMe['folders'] ?? 0)}',
+                subtitle: '${sharedByMe['users'] ?? 0} участн. · ${sharedByMe['folders'] ?? 0} папк.',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                icon: Icons.person_rounded,
+                iconColor: Colors.orange,
+                label: 'Со мной',
+                count: '${(sharedWithMe['files'] ?? 0) + (sharedWithMe['folders'] ?? 0)}',
+                subtitle: '${sharedWithMe['users'] ?? 0} участн. · ${sharedWithMe['folders'] ?? 0} папк.',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildQuickActions(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Column(
@@ -248,11 +315,7 @@ class HomePageState extends State<HomePage> {
       children: [
         Text(
           'Быстрые действия',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: cs.onSurface,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         Row(
@@ -289,6 +352,89 @@ class HomePageState extends State<HomePage> {
     );
   }
 }
+
+// ─── Stat Card ───────────────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String count;
+  final String subtitle;
+
+  const _StatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.count,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.onSurface.withValues(alpha: 0.5),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  count,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.onSurface.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Quick Action Card ───────────────────────────────────────────────────────
 
 class _QuickActionCard extends StatelessWidget {
   final IconData icon;

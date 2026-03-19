@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import '../../../core/config/app_config.dart';
 
 class VideoPlayerPage extends StatefulWidget {
   final String videoUrl;
@@ -29,11 +30,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   void initState() {
     super.initState();
+    final headers = _buildHeaders(widget.videoUrl);
     _controller = VideoPlayerController.networkUrl(
       Uri.parse(widget.videoUrl),
-      httpHeaders: widget.authToken != null
-          ? {'Authorization': 'Bearer ${widget.authToken}'}
-          : {},
+      httpHeaders: headers,
     )
       ..initialize()
           .then((_) {
@@ -51,6 +51,18 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
             }
           });
     _controller.addListener(_onVideoUpdate);
+  }
+
+  Map<String, String> _buildHeaders(String url) {
+    if (widget.authToken == null) return {};
+    final uri = Uri.tryParse(url);
+    if (uri == null) return {};
+    final apiHost = Uri.parse(AppConfig.instance.baseUrl).host;
+    if (uri.host == apiHost) {
+      return {'Authorization': 'Bearer ${widget.authToken}'};
+    }
+    // Pre-signed MinIO links must not include Authorization header.
+    return {};
   }
 
   void _onVideoUpdate() {

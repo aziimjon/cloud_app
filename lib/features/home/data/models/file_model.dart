@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cloud_app/core/config/app_config.dart';
 
 // Sentinel объект для различия "не передан" vs "передан null"
 const _absent = Object();
@@ -27,8 +28,9 @@ class FileModel {
   });
 
   factory FileModel.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'] ?? json['uuid'] ?? json['file_id'] ?? json['file_uuid'];
     return FileModel(
-      id: json['id'].toString(),
+      id: rawId?.toString() ?? '',
       name: _decodeBase64(json['name'] ?? ''),
       size: json['size'] ?? 0,
       mimeType: _decodeBase64(json['mime_type'] ?? ''),
@@ -36,7 +38,7 @@ class FileModel {
       createdAt: DateTime.parse(json['created_at']),
       isFavourite: json['is_favourite'] ?? false,
       favouriteId: json['favourite_id']?.toString(),
-      thumbnailPath: json['thumbnail_path']?.toString(),
+      thumbnailPath: _normalizeUrl(json['thumbnail_path']?.toString()),
     );
   }
 
@@ -77,6 +79,29 @@ class FileModel {
     } catch (_) {
       return value;
     }
+  }
+
+  static String? _normalizeUrl(String? raw) {
+    if (raw == null || raw.isEmpty) return raw;
+    final uri = Uri.tryParse(raw);
+    if (uri != null && uri.hasScheme) return raw;
+
+    final base = Uri.parse(AppConfig.instance.baseUrl);
+    final origin = base.replace(path: '/', query: '', fragment: '');
+
+    if (raw.startsWith('/media/') || raw.startsWith('/static/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/api/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/content/')) {
+      return base.resolve(raw.substring(1)).toString();
+    }
+    if (raw.startsWith('/')) {
+      return origin.resolve(raw).toString();
+    }
+    return base.resolve(raw).toString();
   }
 
   String get formattedSize {

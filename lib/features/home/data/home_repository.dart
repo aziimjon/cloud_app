@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/errors/app_exception.dart';
 import 'models/folder_model.dart';
 import 'models/file_model.dart';
@@ -91,17 +92,17 @@ class HomeRepository {
         followRedirects: false,
         validateStatus: (s) => s != null && s < 500,
       ));
-      
+
       final t = await SecureStorage.getAccessToken();
       if (t != null) {
         directDio.options.headers['Authorization'] = 'Bearer $t';
       }
-      
+
       final response = await directDio.post(
         '/content/folder/',
         data: {'name': name, if (parentId != null) 'parent': parentId},
       );
-      
+
       if (response.statusCode == 404) {
         throw const AppException(message: 'Не удалось создать папку: Сервер вернул 404');
       }
@@ -286,7 +287,7 @@ class HomeRepository {
         data: {'folder': folderUuid},
       );
     } on DioException catch (e) {
-      if (e.response?.statusCode == 400 && 
+      if (e.response?.statusCode == 400 &&
           e.response?.data?['message_key'] == 'you_can_pin_maximum_5_folders') {
         throw const AppException(message: 'Максимум 5 закреплённых папок');
       }
@@ -316,7 +317,7 @@ class HomeRepository {
     } on DioException catch (e) {
       throw AppException(
         message:
-            e.response?.data?['message'] ??
+        e.response?.data?['message'] ??
             'Не удалось загрузить недавние файлы',
         statusCode: e.response?.statusCode,
       );
@@ -326,6 +327,7 @@ class HomeRepository {
   /// Preview endpoint — returns pre-signed MinIO URL for file streaming.
   /// Polls up to 10 times (every 2s) while server is generating the preview.
   Future<String?> getPreviewUrl(String fileId) async {
+    if (fileId.isEmpty) return null;
     const maxAttempts = 10;
     const delay = Duration(seconds: 2);
 
@@ -333,16 +335,29 @@ class HomeRepository {
       try {
         final token = await SecureStorage.getAccessToken();
         final response = await _dio.get(
-          'content/files/$fileId/preview/',
+          '/content/files/$fileId/preview/',
           options: Options(headers: {'Authorization': 'Bearer $token'}),
         );
 
-        final data = response.data;
-        final url = data['url'] as String?;
-        final status = data['preview_status'] as String? ?? '';
+        dynamic data = response.data;
+        if (data is Map && data['result'] is Map) {
+          data = data['result'];
+        }
+
+        String? url;
+        String status = '';
+        if (data is Map) {
+          url = data['url'] as String? ??
+              data['preview_url'] as String? ??
+              data['file_url'] as String? ??
+              data['download_url'] as String?;
+          status = data['preview_status'] as String? ?? '';
+        } else if (data is String) {
+          url = data;
+        }
 
         // URL готов — возвращаем
-        if (url != null && url.isNotEmpty) return url;
+        if (url != null && url.isNotEmpty) return _normalizeApiUrl(url);
 
         // Ещё генерируется — ждём и повторяем
         if (status == 'processing' || status == 'pending') {
@@ -354,7 +369,7 @@ class HomeRepository {
 
         // Превью не требуется — отдаём прямую ссылку на скачивание
         if (status == 'not_required' || status == 'completed') {
-          return 'content/files/$fileId/download/';
+          return _normalizeApiUrl('/content/files/$fileId/download/');
         }
 
         return null;
@@ -368,6 +383,29 @@ class HomeRepository {
       }
     }
     return null;
+  }
+
+  String _normalizeApiUrl(String raw) {
+    if (raw.isEmpty) return raw;
+    final uri = Uri.tryParse(raw);
+    if (uri != null && uri.hasScheme) return raw;
+
+    final base = Uri.parse(AppConfig.instance.baseUrl);
+    final origin = base.replace(path: '/', query: '', fragment: '');
+
+    if (raw.startsWith('/media/') || raw.startsWith('/static/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/api/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/content/')) {
+      return base.resolve(raw.substring(1)).toString();
+    }
+    if (raw.startsWith('/')) {
+      return origin.resolve(raw).toString();
+    }
+    return base.resolve(raw).toString();
   }
 
   // ✅ FIX: id может быть String или int — всегда toString()
@@ -410,9 +448,9 @@ class HomeRepository {
   }
 
   Future<Map<String, dynamic>> getSharedFolder(
-    String userId,
-    String folderId,
-  ) async {
+      String userId,
+      String folderId,
+      ) async {
     try {
       final response = await _dio.get(
         '/content/shared-with-me/$userId/folder/$folderId/',

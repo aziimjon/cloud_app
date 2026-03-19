@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../data/home_repository.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/storage/secure_storage.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/network/dio_client.dart';
 import 'photo_viewer_page.dart';
 import 'video_player_page.dart';
@@ -89,7 +90,7 @@ class _SharedPageState extends State<SharedPage> {
       }
 
       final mime = mimeType.toLowerCase();
-      final thumbPath = item['thumbnail_path']?.toString();
+      final thumbPath = _normalizeUrl(item['thumbnail_path']?.toString());
       if (mime.startsWith('image/') &&
           thumbPath != null &&
           !_previewUrls.containsKey(id)) {
@@ -287,27 +288,27 @@ class _SharedPageState extends State<SharedPage> {
     return BlocProvider.value(
       value: _shareBloc,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FA),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           leading: inDetail
               ? IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.black),
-                  onPressed: _goBack,
-                )
+            icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.onSurface),
+            onPressed: _goBack,
+          )
               : null,
           title: Text(
             inDetail ? (_selectedUserName ?? 'Shared') : 'Shared',
-            style: const TextStyle(
-              color: Colors.black,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.bold,
             ),
           ),
           actions: [
             if (!inDetail && _activeSegment == 0)
               IconButton(
-                icon: const Icon(Icons.refresh, color: Colors.black),
+                icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.onSurface),
                 onPressed: _loadSharedUsers,
               ),
           ],
@@ -318,30 +319,30 @@ class _SharedPageState extends State<SharedPage> {
             Expanded(
               child: inDetail
                   ? (_isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _error != null
-                          ? _buildError()
-                          : _buildFileList())
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                  ? _buildError()
+                  : _buildFileList())
                   : _activeSegment == 0
-                      ? _buildWithMeBody()
-                      : _buildByMeBody(),
+                  ? _buildWithMeBody()
+                  : _buildByMeBody(),
             ),
           ],
         ),
         floatingActionButton:
-            (!inDetail && _activeSegment == 1 && _activeByMeTab == 0)
-                ? FloatingActionButton(
-                    backgroundColor: const Color(0xFF1A73E8),
-                    child: const Icon(Icons.share, color: Colors.white),
-                    onPressed: () => showDialog(
-                      context: context,
-                      builder: (_) => BlocProvider.value(
-                        value: _shareBloc,
-                        child: const ShareDialog(),
-                      ),
-                    ),
-                  )
-                : null,
+        (!inDetail && _activeSegment == 1 && _activeByMeTab == 0)
+            ? FloatingActionButton(
+          backgroundColor: const Color(0xFF1A73E8),
+          child: const Icon(Icons.share, color: Colors.white),
+          onPressed: () => showDialog(
+            context: context,
+            builder: (_) => BlocProvider.value(
+              value: _shareBloc,
+              child: const ShareDialog(),
+            ),
+          ),
+        )
+            : null,
       ),
     );
   }
@@ -351,13 +352,15 @@ class _SharedPageState extends State<SharedPage> {
   // ══════════════════════════════════════════════════════════════════════════════
 
   Widget _buildSegmentControl() {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: Colors.white,
+      color: cs.surface,
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: const Color(0xFFF0F0F0),
+          color: isDark ? const Color(0xFF21262D) : const Color(0xFFF0F0F0),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
@@ -563,6 +566,7 @@ class _SharedPageState extends State<SharedPage> {
   }
 
   Widget _buildByMeUserCard(SharedByMeUserModel user) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -578,7 +582,7 @@ class _SharedPageState extends State<SharedPage> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -672,6 +676,7 @@ class _SharedPageState extends State<SharedPage> {
   }
 
   Widget _buildByMeItemCard(FileShareModel share) {
+    final cs = Theme.of(context).colorScheme;
     final bool isFolder = share.folder != null;
     final String name = isFolder
         ? (share.folder?.name ?? 'Папка')
@@ -721,7 +726,7 @@ class _SharedPageState extends State<SharedPage> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -840,11 +845,12 @@ class _SharedPageState extends State<SharedPage> {
   }
 
   Widget _buildUserCard(_SharedUser user) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => _openUserFiles(user.id, user.fullName),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -934,6 +940,7 @@ class _SharedPageState extends State<SharedPage> {
   }
 
   Widget _buildItemCard(Map<String, dynamic> item, bool isFolder) {
+    final cs = Theme.of(context).colorScheme;
     final rawName = item['name'] ?? '';
     // Декодируем base64 имя если нужно
     String name = rawName;
@@ -951,7 +958,7 @@ class _SharedPageState extends State<SharedPage> {
           : () => _openFileViewer(item, name),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -978,10 +985,10 @@ class _SharedPageState extends State<SharedPage> {
   }
 
   Widget _buildItemLeading(
-    Map<String, dynamic> item,
-    bool isFolder,
-    String id,
-  ) {
+      Map<String, dynamic> item,
+      bool isFolder,
+      String id,
+      ) {
     if (isFolder) {
       return Container(
         width: 44,
@@ -1092,6 +1099,29 @@ class _SharedPageState extends State<SharedPage> {
         size: 22,
       ),
     );
+  }
+
+  String? _normalizeUrl(String? raw) {
+    if (raw == null || raw.isEmpty) return raw;
+    final uri = Uri.tryParse(raw);
+    if (uri != null && uri.hasScheme) return raw;
+
+    final base = Uri.parse(AppConfig.instance.baseUrl);
+    final origin = base.replace(path: '/', query: '', fragment: '');
+
+    if (raw.startsWith('/media/') || raw.startsWith('/static/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/api/')) {
+      return origin.resolve(raw).toString();
+    }
+    if (raw.startsWith('/content/')) {
+      return base.resolve(raw.substring(1)).toString();
+    }
+    if (raw.startsWith('/')) {
+      return origin.resolve(raw).toString();
+    }
+    return base.resolve(raw).toString();
   }
 }
 

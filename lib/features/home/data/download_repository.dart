@@ -48,7 +48,7 @@ class DownloadRepository {
       );
 
       await downloadDio.download(
-        'content/files/$fileId/download/',
+        '/content/files/$fileId/download/',
         savePath,
         onReceiveProgress: (received, total) {
           onProgress?.call(received, total);
@@ -65,7 +65,7 @@ class DownloadRepository {
     } on DioException catch (e) {
       throw AppException(
         message:
-            e.response?.data?['message']?.toString() ??
+        e.response?.data?['message']?.toString() ??
             e.message ??
             'Download failed',
         statusCode: e.response?.statusCode,

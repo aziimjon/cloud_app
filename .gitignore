@@ -28,3 +28,4 @@ lib/core/config/app_config_local.dart
 .idea/
 *.iml
 .vscode/
+.DS_Store

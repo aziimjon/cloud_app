@@ -218,7 +218,7 @@ class _ShareFolderFilesPageState extends State<ShareFolderFilesPage> {
           builder: (_) => PhotoViewerPage(
             files: allImages
                 .map((f) => (
-                      url: f.thumbnailPath ?? '',
+                      url: f.id.isNotEmpty ? '' : (f.thumbnailPath ?? ''),
                       name: f.name,
                       fileId: f.id,
                     ))

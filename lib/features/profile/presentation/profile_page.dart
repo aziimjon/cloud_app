@@ -65,13 +65,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
   String get _fullName =>
       _userData?['full_name'] as String? ??
-      _userData?['name'] as String? ??
-      'Пользователь';
+          _userData?['name'] as String? ??
+          'Пользователь';
 
   String get _phone =>
       _userData?['phone_number'] as String? ??
-      _userData?['phone'] as String? ??
-      '';
+          _userData?['phone'] as String? ??
+          '';
 
   String? get _avatarUrl =>
       _userData?['image'] as String?;
@@ -96,7 +96,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginPage()),
-        (_) => false,
+            (_) => false,
       );
     }
   }
@@ -139,9 +139,9 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -226,9 +226,9 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -319,11 +319,11 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
           padding:
-              EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
           child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: Theme.of(ctx).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -332,7 +332,7 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 const Text('Изменить пароль',
                     style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 _buildPasswordField(
                   controller: currentCtrl,
@@ -460,9 +460,9 @@ class _ProfilePageState extends State<ProfilePage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        decoration: BoxDecoration(
+          color: Theme.of(ctx).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.all(24),
         child: SafeArea(
@@ -528,36 +528,36 @@ class _ProfilePageState extends State<ProfilePage> {
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : RefreshIndicator(
-                onRefresh: _loadData,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
+          onRefresh: _loadData,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 60),
+                _buildNamePhone(),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
-                      _buildHeader(),
-                      const SizedBox(height: 60),
-                      _buildNamePhone(),
+                      _buildEditSection(),
+                      const SizedBox(height: 16),
+                      _buildStorage(),
+                      const SizedBox(height: 16),
+                      _buildLanguage(),
+                      const SizedBox(height: 16),
+                      _buildTheme(),
                       const SizedBox(height: 24),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Column(
-                          children: [
-                            _buildEditSection(),
-                            const SizedBox(height: 16),
-                            _buildStorage(),
-                            const SizedBox(height: 16),
-                            _buildLanguage(),
-                            const SizedBox(height: 16),
-                            _buildTheme(),
-                            const SizedBox(height: 24),
-                            _buildLogout(),
-                            const SizedBox(height: 40),
-                          ],
-                        ),
-                      ),
+                      _buildLogout(),
+                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
-              ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -599,7 +599,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           : null,
                       child: _avatarUrl == null
                           ? const Icon(Icons.person,
-                              size: 48, color: Colors.white)
+                          size: 48, color: Colors.white)
                           : null,
                     ),
                     Positioned(
@@ -865,7 +865,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   borderRadius: BorderRadius.circular(16)),
               title: const Text('Выход'),
               content:
-                  const Text('Вы уверены, что хотите выйти из аккаунта?'),
+              const Text('Вы уверены, что хотите выйти из аккаунта?'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
@@ -952,7 +952,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           fontSize: 15, fontWeight: FontWeight.w500)),
                   Text(subtitle,
                       style:
-                          TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                      TextStyle(fontSize: 13, color: Colors.grey.shade500)),
                 ],
               ),
             ),
