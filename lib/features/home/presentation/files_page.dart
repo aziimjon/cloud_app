@@ -44,7 +44,7 @@ class FilesPageState extends State<FilesPage> {
   String? _error;
   bool _isGrid = true;
   String? _authToken;
-  final Map<String, String> _previewUrls = {};
+
 
   final Map<String, double> _downloadProgress = {};
   final Map<String, int> _downloadReceivedBytes = {};
@@ -240,16 +240,7 @@ class FilesPageState extends State<FilesPage> {
     if (mounted) setState(() => _authToken = token);
   }
 
-  void _loadPreviewUrls(List<FileModel> files) {
-    for (final f in files) {
-      if (f.thumbnailPath != null &&
-          f.thumbnailPath!.isNotEmpty &&
-          !_previewUrls.containsKey(f.id)) {
-        _previewUrls[f.id] = f.thumbnailPath!;
-      }
-    }
-    if (mounted) setState(() {});
-  }
+
 
   Future<void> _openFileViewer(FileModel file) async {
     final t = AppLocalizations.of(context)!;
@@ -336,7 +327,7 @@ class FilesPageState extends State<FilesPage> {
         _totalFilesCount = result['totalCount'] as int? ?? _files.length;
         _isLoading = false;
       });
-      _loadPreviewUrls(_files);
+
     } on AppException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -362,7 +353,7 @@ class FilesPageState extends State<FilesPage> {
         _hasNextPage = result['hasNext'] as bool;
         _isLoadingMore = false;
       });
-      _loadPreviewUrls(newFiles);
+
     } on AppException catch (_) {
       if (!mounted) return;
       setState(() => _isLoadingMore = false);
@@ -1030,7 +1021,7 @@ class FilesPageState extends State<FilesPage> {
                       id: file.id,
                       type: 'file',
                       name: file.name,
-                      previewUrl: _previewUrls[file.id] ?? '',
+                      previewUrl: file.thumbnailPath ?? '',
                       iconColor: _color(file.mimeType),
                       icon: _icon(file.mimeType),
                     );
@@ -1292,7 +1283,9 @@ class FilesPageState extends State<FilesPage> {
                                     right: 16,
                                     top: 16,
                                     bottom: 160),
-                                sliver: _buildContent(),
+                                sliver: SliverMainAxisGroup(
+                                  slivers: _buildContentSlivers(),
+                                ),
                               ),
                     ],
                   ),
@@ -1818,133 +1811,151 @@ class FilesPageState extends State<FilesPage> {
     );
   }
 
-  Widget _buildContent() {
+  List<Widget> _buildContentSlivers() {
     final t = AppLocalizations.of(context)!;
-    return SliverList(
-      delegate: SliverChildListDelegate([
-        if (_showFavourites) ...[
-          Row(
-            children: [
-              const Icon(Icons.star_rounded,
-                  color: Colors.amber, size: 18),
-              const SizedBox(width: 6),
-              Text(
-                t.favourites_breadcrumb,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${_displayFiles.length}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.amber,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: _showFilterSheet,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _activeFilter != _FilterType.all
-                        ? Colors.blue.withValues(alpha: 0.1)
-                        : Colors.grey.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.filter_list_rounded,
-                          size: 14,
-                          color: _activeFilter != _FilterType.all
-                              ? Colors.blue
-                              : Colors.grey),
-                      const SizedBox(width: 4),
-                      Text(
-                        _activeFilter == _FilterType.images
-                            ? t.photos
-                            : _activeFilter == _FilterType.videos
-                            ? t.videos
-                            : t.filter,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _activeFilter != _FilterType.all
-                              ? Colors.blue
-                              : Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+    // ── Header & folders section (non-virtualized, small content) ──
+    final headerChildren = <Widget>[];
+
+    if (_showFavourites) {
+      headerChildren.add(Row(
+        children: [
+          const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
+          const SizedBox(width: 6),
+          Text(
+            t.favourites_breadcrumb,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
-          const SizedBox(height: 12),
-        ],
-        if (_displayFolders.isNotEmpty) ...[
-          _buildSectionHeader(t.folders, Icons.folder_rounded,
-              _displayFolders.length,
-              trailing: IconButton(
-                icon: const Icon(Icons.create_new_folder_outlined,
-                    color: Colors.blue, size: 24),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: _showCreateFolderDialog,
-              )),
-          if (!_showFavourites && _pinnedFolders.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _buildPinnedFolders(),
-          ],
-          const SizedBox(height: 8),
-          _isGrid ? _buildFoldersGrid() : _buildFoldersList(),
-          const SizedBox(height: 20),
-        ],
-        if (_displayFolders.isEmpty && !_showFavourites) ...[
-          _buildSectionHeader(t.folders, Icons.folder_rounded, 0,
-              trailing: IconButton(
-                icon: const Icon(Icons.create_new_folder_outlined,
-                    color: Colors.blue, size: 24),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: _showCreateFolderDialog,
-              )),
-          if (!_showFavourites && _pinnedFolders.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _buildPinnedFolders(),
-          ],
-          const SizedBox(height: 8),
-        ],
-        if (_displayFiles.isNotEmpty) ...[
-          if (!_showFavourites)
-            _buildSectionHeader(
-                t.files, Icons.insert_drive_file, _totalFilesCount),
-          const SizedBox(height: 8),
-          if (_isGrid && !_showFavourites)
-            _buildFilesGrid()
-          else
-            _buildFilesList(),
-        ],
-        if (_isLoadingMore)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 20),
-            child: Center(child: CircularProgressIndicator()),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '${_displayFiles.length}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.amber,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-      ]),
-    );
+          const Spacer(),
+          GestureDetector(
+            onTap: _showFilterSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _activeFilter != _FilterType.all
+                    ? Colors.blue.withValues(alpha: 0.1)
+                    : Colors.grey.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.filter_list_rounded,
+                      size: 14,
+                      color: _activeFilter != _FilterType.all
+                          ? Colors.blue
+                          : Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(
+                    _activeFilter == _FilterType.images
+                        ? t.photos
+                        : _activeFilter == _FilterType.videos
+                        ? t.videos
+                        : t.filter,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _activeFilter != _FilterType.all
+                          ? Colors.blue
+                          : Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ));
+      headerChildren.add(const SizedBox(height: 12));
+    }
+
+    if (_displayFolders.isNotEmpty) {
+      headerChildren.add(_buildSectionHeader(
+          t.folders, Icons.folder_rounded, _displayFolders.length,
+          trailing: IconButton(
+            icon: const Icon(Icons.create_new_folder_outlined,
+                color: Colors.blue, size: 24),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: _showCreateFolderDialog,
+          )));
+      if (!_showFavourites && _pinnedFolders.isNotEmpty) {
+        headerChildren.add(const SizedBox(height: 8));
+        headerChildren.add(_buildPinnedFolders());
+      }
+      headerChildren.add(const SizedBox(height: 8));
+      headerChildren.add(_isGrid ? _buildFoldersGrid() : _buildFoldersList());
+      headerChildren.add(const SizedBox(height: 20));
+    } else if (!_showFavourites) {
+      headerChildren.add(_buildSectionHeader(
+          t.folders, Icons.folder_rounded, 0,
+          trailing: IconButton(
+            icon: const Icon(Icons.create_new_folder_outlined,
+                color: Colors.blue, size: 24),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: _showCreateFolderDialog,
+          )));
+      if (_pinnedFolders.isNotEmpty) {
+        headerChildren.add(const SizedBox(height: 8));
+        headerChildren.add(_buildPinnedFolders());
+      }
+      headerChildren.add(const SizedBox(height: 8));
+    }
+
+    if (_displayFiles.isNotEmpty && !_showFavourites) {
+      headerChildren.add(_buildSectionHeader(
+          t.files, Icons.insert_drive_file, _totalFilesCount));
+      headerChildren.add(const SizedBox(height: 8));
+    }
+
+    final slivers = <Widget>[];
+
+    // ── 1. Header sliver (folders, section headers) ──
+    if (headerChildren.isNotEmpty) {
+      slivers.add(SliverList(
+        delegate: SliverChildListDelegate(headerChildren),
+      ));
+    }
+
+    // ── 2. Files sliver (virtualized) ──
+    if (_displayFiles.isNotEmpty) {
+      if (_isGrid && !_showFavourites) {
+        slivers.add(_buildFilesGridSliver());
+      } else {
+        slivers.add(_buildFilesListSliver());
+      }
+    }
+
+    // ── 3. Loading more indicator ──
+    if (_isLoadingMore) {
+      slivers.add(const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ));
+    }
+
+    return slivers;
   }
 
   Widget _buildPinnedFolders() {
@@ -2024,66 +2035,72 @@ class FilesPageState extends State<FilesPage> {
     );
   }
 
-  Widget _buildFilesGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.85,
+  Widget _buildFilesGridSliver() {
+    return SliverGrid(
+      delegate: SliverChildBuilderDelegate(
+        (context, i) {
+          final f = _displayFiles[i];
+          return RepaintBoundary(
+            child: _FileGridCard(
+              key: ValueKey(f.id),
+              file: f,
+              isSelected: _selectedFiles.contains(f.id),
+              isSelectionMode: _isSelectionMode,
+              onTap: () {
+                if (_isSelectionMode) {
+                  _toggleFileSelection(f.id);
+                } else {
+                  _openFileViewer(f);
+                }
+              },
+              onSelectTap: () => _toggleFileSelection(f.id),
+              onMenuTap: () => _showFileMenu(f),
+              onFavouriteTap: () =>
+                  FavouritesProvider.instance.toggleFavourite(f),
+            ),
+          );
+        },
+        childCount: _displayFiles.length,
       ),
-      itemCount: _displayFiles.length,
-      itemBuilder: (_, i) {
-        final f = _displayFiles[i];
-        return _FileGridCard(
-          file: f,
-          isSelected: _selectedFiles.contains(f.id),
-          isSelectionMode: _isSelectionMode,
-          previewUrl: _previewUrls[f.id],
-          onTap: () {
-            if (_isSelectionMode) {
-              _toggleFileSelection(f.id);
-            } else {
-              _openFileViewer(f);
-            }
-          },
-          onSelectTap: () => _toggleFileSelection(f.id),
-          onMenuTap: () => _showFileMenu(f),
-          onFavouriteTap: () =>
-              FavouritesProvider.instance.toggleFavourite(f),
-        );
-      },
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 2,
+        mainAxisSpacing: 2,
+        childAspectRatio: 1.0,
+      ),
     );
   }
 
-  Widget _buildFilesList() {
-    return Column(
-      children: [
-        ..._displayFiles.map(
-              (f) => _FileTile(
-            file: f,
-            isSelected: _selectedFiles.contains(f.id),
-            isSelectionMode: _isSelectionMode,
-            authToken: _authToken,
-            previewUrl: _previewUrls[f.id],
-            onTap: () {
-              if (_isSelectionMode) {
-                _toggleFileSelection(f.id);
-              } else {
-                _openFileViewer(f);
-              }
-            },
-            onSelectTap: () => _toggleFileSelection(f.id),
-            onMenuTap: () => _showFileMenu(f),
-            downloadProgress: _downloadProgress[f.id],
-            downloadReceivedBytes: _downloadReceivedBytes[f.id],
-            onFavouriteTap: () =>
-                FavouritesProvider.instance.toggleFavourite(f),
-          ),
-        ),
-      ],
+  Widget _buildFilesListSliver() {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, i) {
+          final f = _displayFiles[i];
+          return RepaintBoundary(
+            child: _FileTile(
+              key: ValueKey(f.id),
+              file: f,
+              isSelected: _selectedFiles.contains(f.id),
+              isSelectionMode: _isSelectionMode,
+              authToken: _authToken,
+              onTap: () {
+                if (_isSelectionMode) {
+                  _toggleFileSelection(f.id);
+                } else {
+                  _openFileViewer(f);
+                }
+              },
+              onSelectTap: () => _toggleFileSelection(f.id),
+              onMenuTap: () => _showFileMenu(f),
+              downloadProgress: _downloadProgress[f.id],
+              downloadReceivedBytes: _downloadReceivedBytes[f.id],
+              onFavouriteTap: () =>
+                  FavouritesProvider.instance.toggleFavourite(f),
+            ),
+          );
+        },
+        childCount: _displayFiles.length,
+      ),
     );
   }
 
@@ -2657,11 +2674,12 @@ class _FileTile extends StatelessWidget {
   final int? downloadReceivedBytes;
   final VoidCallback? onFavouriteTap;
   final String? authToken;
-  final String? previewUrl;
+
   final VoidCallback? onTap;
   final VoidCallback? onSelectTap;
 
   const _FileTile({
+    super.key,
     required this.file,
     required this.isSelected,
     required this.isSelectionMode,
@@ -2670,7 +2688,6 @@ class _FileTile extends StatelessWidget {
     this.downloadReceivedBytes,
     this.onFavouriteTap,
     this.authToken,
-    this.previewUrl,
     this.onTap,
     this.onSelectTap,
   });
@@ -2915,13 +2932,13 @@ class _FileGridCard extends StatelessWidget {
   final FileModel file;
   final bool isSelected;
   final bool isSelectionMode;
-  final String? previewUrl;
   final VoidCallback onTap;
   final VoidCallback onSelectTap;
   final VoidCallback onMenuTap;
   final VoidCallback onFavouriteTap;
 
   const _FileGridCard({
+    super.key,
     required this.file,
     required this.isSelected,
     required this.isSelectionMode,
@@ -2929,7 +2946,6 @@ class _FileGridCard extends StatelessWidget {
     required this.onSelectTap,
     required this.onMenuTap,
     required this.onFavouriteTap,
-    this.previewUrl,
   });
 
   IconData _icon(String mime) {
@@ -2985,6 +3001,9 @@ class _FileGridCard extends StatelessWidget {
                         ? CachedNetworkImage(
                       imageUrl: thumb,
                       fit: BoxFit.cover,
+                      memCacheWidth: 300,
+                      memCacheHeight: 300,
+                      fadeInDuration: const Duration(milliseconds: 150),
                       placeholder: (_, __) => Container(
                         color: color.withValues(alpha: 0.08),
                         child: Icon(_icon(mime),

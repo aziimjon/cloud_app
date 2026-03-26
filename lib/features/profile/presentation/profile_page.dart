@@ -10,6 +10,7 @@ import '../../auth/presentation/login_page.dart';
 import '../data/profile_repository.dart';
 import '../../../main.dart';
 import '../../share/presentation/share_requests_page.dart';
+import '../../sync/presentation/auto_sync_settings_page.dart';
 import 'package:cloud_app/l10n/app_localizations.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -562,6 +563,8 @@ class _ProfilePageState extends State<ProfilePage> {
                       const SizedBox(height: 16),
                       _buildShareRequests(),
                       const SizedBox(height: 16),
+                      _buildAutoSync(),
+                      const SizedBox(height: 16),
                       _buildTheme(),
                       const SizedBox(height: 24),
                       _buildLogout(),
@@ -855,6 +858,71 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                     Text(
                       t.shareRequestsSubtitle,
+                      style: TextStyle(
+                          fontSize: 13, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  color: Colors.grey.shade400, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Auto-Sync
+  Widget _buildAutoSync() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AutoSyncSettingsPage(),
+          ),
+        ),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding:
+          const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.sync_rounded,
+                    color: Colors.green, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Авто-синхронизация',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      'Автоматическая загрузка фото и видео',
                       style: TextStyle(
                           fontSize: 13, color: Colors.grey.shade500),
                     ),

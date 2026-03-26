@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../sync/auto_sync_service.dart';
 
 class AuthRepository {
   final Dio _dio = DioClient.instance;
@@ -49,6 +52,7 @@ class AuthRepository {
         accessToken: accessToken?.toString() ?? '',
         refreshToken: refreshToken?.toString() ?? '',
       );
+      unawaited(AutoSyncService().initialize());
 
       final me = await _dio.get('authentication/users/me/');
       final meData = me.data is Map && me.data.containsKey('result')
@@ -121,6 +125,7 @@ class AuthRepository {
           accessToken: accessToken.toString(),
           refreshToken: refreshToken?.toString() ?? '',
         );
+        unawaited(AutoSyncService().initialize());
         final me = await _dio.get('authentication/users/me/');
         final meData = me.data is Map && me.data.containsKey('result')
             ? me.data['result']

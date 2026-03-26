@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/config/app_config.dart';
 import 'core/services/language_notifier.dart';
 import 'features/auth/presentation/splash_page.dart';
+import 'features/sync/auto_sync_service.dart';
 import 'l10n/app_localizations.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -129,6 +130,7 @@ void main() async {
   AppConfig.initialize(Environment.dev);
   await ThemeNotifier.instance.init();
   await LanguageNotifier.instance.init();
+  await AutoSyncService().initialize();
   runApp(const CloudApp());
 }
 
