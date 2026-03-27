@@ -476,4 +476,78 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get favourite => 'Favourite';
+
+  @override
+  String get syncFolderName => '📱 Sync';
+
+  @override
+  String syncStatusUploading(int uploaded, int total) {
+    return 'Uploading $uploaded of $total';
+  }
+
+  @override
+  String syncStatusWaiting(int count) {
+    return 'Waiting to sync: $count';
+  }
+
+  @override
+  String get syncStatusComplete => 'Sync complete';
+
+  @override
+  String syncStatusErrors(int count) {
+    return '$count errors';
+  }
+
+  @override
+  String get syncSettingsTitle => 'Auto Sync';
+
+  @override
+  String get syncEnableToggle => 'Enable auto sync';
+
+  @override
+  String get syncWifiOnly => 'Wi-Fi only';
+
+  @override
+  String get syncNowButton => 'Sync now';
+
+  @override
+  String get syncResetButton => 'Reset queue';
+
+  @override
+  String get syncFolderReadOnly =>
+      'This is your Sync folder. Files here are managed automatically.';
+
+  @override
+  String get syncResetConfirmTitle => 'Reset queue?';
+
+  @override
+  String get syncResetConfirmMessage =>
+      'All records will be deleted. The app will re-scan the gallery after that.';
+
+  @override
+  String get syncResetConfirmButton => 'Reset';
+
+  @override
+  String get syncAutoUpload => 'Automatically upload photos and videos';
+
+  @override
+  String get syncNoMobileData => 'Do not sync over mobile data';
+
+  @override
+  String get syncStatusTitle => 'Sync status';
+
+  @override
+  String get syncStatusPending => 'Pending';
+
+  @override
+  String get syncStatusUploading2 => 'Uploading';
+
+  @override
+  String get syncStatusDone => 'Done';
+
+  @override
+  String get syncStatusFailed => 'Errors';
+
+  @override
+  String get syncStop => 'Stop';
 }

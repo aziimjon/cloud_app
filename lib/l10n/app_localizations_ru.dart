@@ -478,4 +478,78 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get favourite => 'Избранное';
+
+  @override
+  String get syncFolderName => '📱 Синхронизация';
+
+  @override
+  String syncStatusUploading(int uploaded, int total) {
+    return 'Загружено $uploaded из $total';
+  }
+
+  @override
+  String syncStatusWaiting(int count) {
+    return 'Ожидание синхронизации: $count';
+  }
+
+  @override
+  String get syncStatusComplete => 'Синхронизация завершена';
+
+  @override
+  String syncStatusErrors(int count) {
+    return 'Ошибок: $count';
+  }
+
+  @override
+  String get syncSettingsTitle => 'Авто-синхронизация';
+
+  @override
+  String get syncEnableToggle => 'Включить авто-синхронизацию';
+
+  @override
+  String get syncWifiOnly => 'Только по Wi-Fi';
+
+  @override
+  String get syncNowButton => 'Синхронизировать сейчас';
+
+  @override
+  String get syncResetButton => 'Сбросить очередь';
+
+  @override
+  String get syncFolderReadOnly =>
+      'Это папка синхронизации. Файлы здесь управляются автоматически.';
+
+  @override
+  String get syncResetConfirmTitle => 'Сбросить очередь?';
+
+  @override
+  String get syncResetConfirmMessage =>
+      'Все записи будут удалены. После этого приложение заново просканирует галерею.';
+
+  @override
+  String get syncResetConfirmButton => 'Сбросить';
+
+  @override
+  String get syncAutoUpload => 'Автоматически загружать фото и видео';
+
+  @override
+  String get syncNoMobileData => 'Не синхронизировать через мобильные данные';
+
+  @override
+  String get syncStatusTitle => 'Статус синхронизации';
+
+  @override
+  String get syncStatusPending => 'Ожидание';
+
+  @override
+  String get syncStatusUploading2 => 'Загрузка';
+
+  @override
+  String get syncStatusDone => 'Готово';
+
+  @override
+  String get syncStatusFailed => 'Ошибки';
+
+  @override
+  String get syncStop => 'Остановить';
 }

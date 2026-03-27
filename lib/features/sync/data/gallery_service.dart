@@ -1,5 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
+
+import 'sync_task.dart';
+
+const _uuidGen = Uuid();
 
 class GalleryFile {
   final String id;
@@ -133,6 +138,54 @@ class GalleryService {
     } catch (e) {
       debugPrint('[GalleryService] getDownloadInfo($uuid) failed: $e');
       rethrow;
+    }
+  }
+
+  /// POST /content/files/check-duplicate/
+  /// Returns Map<localTaskId, isDuplicate> for deduplication before upload.
+  /// On error returns empty map (safe fallback — upload all).
+  Future<Map<String, bool>> checkDuplicates(List<SyncTask> tasks) async {
+    if (tasks.isEmpty) return {};
+
+    try {
+      // Build request: generate fresh UUID per file for tracking
+      final uuidToTask = <String, SyncTask>{};
+      final filesPayload = tasks.map((task) {
+        final id = _uuidGen.v4();
+        uuidToTask[id] = task;
+        return {
+          'name': task.fileName,
+          'size': task.fileSize,
+          'type': task.mimeType,
+          'uuid': id,
+        };
+      }).toList();
+
+      final response = await _dio.post(
+        '/content/files/check-duplicate/',
+        data: {'files': filesPayload},
+      );
+
+      // Response: [{ uuid: string, is_duplicate: bool }]
+      final List result = response.data as List;
+
+      // Map: localTaskId → is_duplicate
+      final Map<String, bool> duplicateMap = {};
+      for (final item in result) {
+        final uuid = item['uuid'].toString();
+        final isDuplicate = item['is_duplicate'] as bool;
+        if (uuidToTask.containsKey(uuid)) {
+          final task = uuidToTask[uuid]!;
+          duplicateMap[task.localId] = isDuplicate;
+        }
+      }
+
+      debugPrint(
+          '[GalleryService] checkDuplicates: ${duplicateMap.values.where((v) => v).length} duplicates found');
+      return duplicateMap;
+    } catch (e) {
+      debugPrint('[GalleryService] checkDuplicates failed: $e');
+      return {}; // On error: upload all (safe fallback)
     }
   }
 }

@@ -1,10 +1,12 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/errors/app_exception.dart';
 import 'models/folder_model.dart';
 import 'models/file_model.dart';
 import '../../../core/storage/secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeRepository {
   final Dio _dio = DioClient.instance;
@@ -126,6 +128,14 @@ class HomeRepository {
     required String id,
     required String name,
   }) async {
+    // Guard: sync folder cannot be renamed
+    if (type == 'folder') {
+      final prefs = await SharedPreferences.getInstance();
+      final syncUuid = prefs.getString('sync_folder_uuid');
+      if (syncUuid != null && syncUuid == id) {
+        throw const AppException(message: 'Cannot modify sync folder');
+      }
+    }
     try {
       await _dio.patch(
         '/content/folder-file/rename/',
@@ -139,7 +149,19 @@ class HomeRepository {
     }
   }
 
-  Future<void> deleteItem({required String type, required String id}) async {
+  Future<void> deleteItem({required String type, required String id, bool isSystem = false}) async {
+    // Guard: system folders cannot be deleted
+    if (type == 'folder' && isSystem) {
+      throw const AppException(message: 'Cannot delete system folder');
+    }
+    // Guard: sync folder cannot be deleted
+    if (type == 'folder') {
+      final prefs = await SharedPreferences.getInstance();
+      final syncUuid = prefs.getString('sync_folder_uuid');
+      if (syncUuid != null && syncUuid == id) {
+        throw const AppException(message: 'Cannot modify sync folder');
+      }
+    }
     try {
       await _dio.delete(
         '/content/folder-file/delete/',
@@ -160,6 +182,15 @@ class HomeRepository {
     required List<String> files,
     required List<String> folders,
   }) async {
+    // Guard: filter out sync folder from bulk deletion
+    if (folders.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      final syncUuid = prefs.getString('sync_folder_uuid');
+      if (syncUuid != null && folders.contains(syncUuid)) {
+        folders = List<String>.from(folders)..remove(syncUuid);
+        debugPrint('[HomeRepository] Blocked sync folder from bulk delete');
+      }
+    }
     try {
       await _dio.delete(
         '/content/folder-file/delete/',
@@ -306,6 +337,20 @@ class HomeRepository {
         message: e.response?.data?['message'] ?? 'Не удалось открепить папку',
         statusCode: e.response?.statusCode,
       );
+    }
+  }
+
+  /// Checks if a folder with the given [id] exists on the server.
+  /// Returns true if the server returns a valid response, false on 404.
+  Future<bool> folderExists(String id) async {
+    try {
+      final response = await _dio.get('/content/folder/$id/');
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return false;
+      return false;
+    } catch (_) {
+      return false;
     }
   }
 

@@ -140,5 +140,43 @@
   "selectAll": "Barchasi",
   "deselectAll": "Barchasini bekor qilish",
   "uploadFiles": "Fayllarni yuklash",
-  "chooseLanguage": "Tilni tanlang"
+  "chooseLanguage": "Tilni tanlang",
+  "syncFolderName": "📱 Sinxronizatsiya",
+  "syncStatusUploading": "{total} tadan {uploaded} yuklandi",
+  "@syncStatusUploading": {
+    "placeholders": {
+      "uploaded": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "syncStatusWaiting": "Sinxronizatsiya kutilmoqda: {count}",
+  "@syncStatusWaiting": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "syncStatusComplete": "Sinxronizatsiya tugadi",
+  "syncStatusErrors": "{count} ta xato",
+  "@syncStatusErrors": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "syncSettingsTitle": "Avtomatik sinxronizatsiya",
+  "syncEnableToggle": "Avtomatik sinxronizatsiyani yoqish",
+  "syncWifiOnly": "Faqat Wi-Fi orqali",
+  "syncNowButton": "Hozir sinxronlashtirish",
+  "syncResetButton": "Navbatni tozalash",
+  "syncFolderReadOnly": "Bu sinxronizatsiya papkasi. Fayllar avtomatik boshqariladi.",
+  "syncResetConfirmTitle": "Navbatni tozalash?",
+  "syncResetConfirmMessage": "Barcha yozuvlar o'chiriladi. Ilova galereyani qaytadan skanerlaydi.",
+  "syncResetConfirmButton": "Tozalash",
+  "syncAutoUpload": "Rasmlar va videolarni avtomatik yuklash",
+  "syncNoMobileData": "Mobil internet orqali sinxronlamaslik",
+  "syncStatusTitle": "Sinxronizatsiya holati",
+  "syncStatusPending": "Kutilmoqda",
+  "syncStatusUploading2": "Yuklanmoqda",
+  "syncStatusDone": "Tayyor",
+  "syncStatusFailed": "Xatolar",
+  "syncStop": "To'xtatish"
 }

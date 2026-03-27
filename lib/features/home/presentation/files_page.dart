@@ -21,6 +21,7 @@ import '../../share/data/repository/share_repository_impl.dart';
 import '../../share/data/remote/share_remote_data_source_impl.dart';
 import '../../share/presentation/widgets/share_dialog.dart';
 import '../../profile/data/profile_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum _FilterType { all, images, videos }
 
@@ -68,6 +69,8 @@ class FilesPageState extends State<FilesPage> {
   int _folderPage = 0;
   int _totalFilesCount = 0;
   late final ShareBloc _shareBloc;
+  bool _isSyncFolder = false;
+  String? _syncFolderUuid;
 
   String _fmt(dynamic b) {
     if (b == null) return '0 KB';
@@ -157,6 +160,8 @@ class FilesPageState extends State<FilesPage> {
   }
 
   void _toggleFolderSelection(String id) {
+    // Sync folder cannot be selected
+    if (_syncFolderUuid != null && id == _syncFolderUuid) return;
     setState(() {
       if (_selectedFolders.contains(id)) {
         _selectedFolders.remove(id);
@@ -327,6 +332,7 @@ class FilesPageState extends State<FilesPage> {
         _totalFilesCount = result['totalCount'] as int? ?? _files.length;
         _isLoading = false;
       });
+      _checkSyncFolder();
 
     } on AppException catch (e) {
       if (!mounted) return;
@@ -428,9 +434,45 @@ class FilesPageState extends State<FilesPage> {
       _showFavourites = false;
       _activeFilter = _FilterType.all;
       _folderPage = 0;
+      _isSyncFolder = false;
     });
     widget.onFolderChanged?.call(folder.id);
     _loadContent();
+  }
+
+  Future<void> _checkSyncFolder() async {
+    final folderId = _currentFolderId;
+    if (folderId == null) {
+      if (_isSyncFolder) setState(() => _isSyncFolder = false);
+      // Still load the cached UUID for UI purposes
+      if (_syncFolderUuid == null) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          _syncFolderUuid = prefs.getString('sync_folder_uuid');
+        } catch (_) {}
+      }
+      return;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final syncUuid = prefs.getString('sync_folder_uuid');
+      _syncFolderUuid = syncUuid;
+      final isSync = syncUuid != null && syncUuid == folderId;
+      if (mounted && isSync != _isSyncFolder) {
+        setState(() => _isSyncFolder = isSync);
+      }
+    } catch (_) {}
+  }
+
+  /// Sync check for a specific folder ID (used in folder action sheets).
+  Future<bool> _isSyncFolderById(String folderId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final syncUuid = prefs.getString('sync_folder_uuid');
+      return syncUuid != null && syncUuid == folderId;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _navigateTo(int index) {
@@ -439,6 +481,7 @@ class FilesPageState extends State<FilesPage> {
       setState(() {
         _breadcrumb.clear();
         _folderPage = 0;
+        _isSyncFolder = false;
       });
       widget.onFolderChanged?.call(null);
     } else {
@@ -702,8 +745,10 @@ class FilesPageState extends State<FilesPage> {
     );
   }
 
-  void _showFolderMenu(FolderModel folder) {
+  void _showFolderMenu(FolderModel folder) async {
     final t = AppLocalizations.of(context)!;
+    final isSyncF = await _isSyncFolderById(folder.id);
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -779,114 +824,137 @@ class FilesPageState extends State<FilesPage> {
                     );
                   },
                 ),
-                _buildBottomSheetItem(
-                  icon: Icons.share_rounded,
-                  color: Colors.green,
-                  title: t.share,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showShareDialog(fileIds: [], folderIds: [folder.id]);
-                  },
-                ),
-                _buildBottomSheetItem(
-                  icon: Icons.drive_file_rename_outline,
-                  color: Colors.orange,
-                  title: t.rename,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showRenameDialog(
-                      currentName: folder.name,
-                      onRename: (newName) async {
-                        try {
-                          await _repo.renameItem(
-                              type: 'folder', id: folder.id, name: newName);
-                          if (!mounted) return;
-                          _loadContent();
-                        } on AppException catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text(e.message),
-                                backgroundColor: Colors.red),
-                          );
-                        }
-                      },
-                    );
-                  },
-                ),
-                _buildBottomSheetItem(
-                  icon: Icons.arrow_forward_rounded,
-                  color: Colors.blue,
-                  title: t.move,
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    final result = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MoveDestinationScreen(
-                          selectedFiles: const [],
-                          selectedFolders: [folder.id],
-                          currentFolderId: _currentFolderId,
-                        ),
-                      ),
-                    );
-                    if (result == true) {
-                      _loadContent();
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(t.successfullyMoved),
-                          backgroundColor: Colors.green,
+                if (!isSyncF) ...[
+                  _buildBottomSheetItem(
+                    icon: Icons.share_rounded,
+                    color: Colors.green,
+                    title: t.share,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showShareDialog(fileIds: [], folderIds: [folder.id]);
+                    },
+                  ),
+                  _buildBottomSheetItem(
+                    icon: Icons.drive_file_rename_outline,
+                    color: Colors.orange,
+                    title: t.rename,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showRenameDialog(
+                        currentName: folder.name,
+                        onRename: (newName) async {
+                          try {
+                            await _repo.renameItem(
+                                type: 'folder', id: folder.id, name: newName);
+                            if (!mounted) return;
+                            _loadContent();
+                          } on AppException catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(e.message),
+                                  backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                  _buildBottomSheetItem(
+                    icon: Icons.arrow_forward_rounded,
+                    color: Colors.blue,
+                    title: t.move,
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      final result = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MoveDestinationScreen(
+                            selectedFiles: const [],
+                            selectedFolders: [folder.id],
+                            currentFolderId: _currentFolderId,
+                          ),
                         ),
                       );
-                    }
-                  },
-                ),
-                _buildBottomSheetItem(
-                  icon: Icons.delete_outline,
-                  color: Colors.red,
-                  title: t.delete,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showDeleteConfirmDialog(
-                      itemName: folder.name,
-                      onConfirm: () async {
-                        try {
-                          await _repo.deleteItem(
-                              type: 'folder', id: folder.id);
-                          if (!mounted) return;
-                          _loadContent();
-                        } on AppException catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text(e.message),
-                                backgroundColor: Colors.red),
-                          );
-                        }
-                      },
-                    );
-                  },
-                ),
-                Builder(
-                  builder: (_) {
-                    final pinId = _getPinId(folder.id);
-                    final isPinned = pinId != null;
-                    return _buildBottomSheetItem(
-                      icon: Icons.push_pin_outlined,
-                      color: isPinned ? Colors.orange : Colors.blueGrey,
-                      title: isPinned ? t.unpinLabel : t.pinLabel,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        if (isPinned) {
-                          _unpinFolder(pinId);
-                        } else {
-                          _pinFolder(folder);
-                        }
-                      },
-                    );
-                  },
-                ),
+                      if (result == true) {
+                        _loadContent();
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(t.successfullyMoved),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  _buildBottomSheetItem(
+                    icon: Icons.delete_outline,
+                    color: Colors.red,
+                    title: t.delete,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showDeleteConfirmDialog(
+                        itemName: folder.name,
+                        onConfirm: () async {
+                          try {
+                            await _repo.deleteItem(
+                                type: 'folder', id: folder.id);
+                            if (!mounted) return;
+                            _loadContent();
+                          } on AppException catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(e.message),
+                                  backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                      );
+                    },
+                  ),
+                  Builder(
+                    builder: (_) {
+                      final pinId = _getPinId(folder.id);
+                      final isPinned = pinId != null;
+                      return _buildBottomSheetItem(
+                        icon: Icons.push_pin_outlined,
+                        color: isPinned ? Colors.orange : Colors.blueGrey,
+                        title: isPinned ? t.unpinLabel : t.pinLabel,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          if (isPinned) {
+                            _unpinFolder(pinId);
+                          } else {
+                            _pinFolder(folder);
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ],
+                if (isSyncF)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.lock_outline,
+                            size: 14,
+                            color: Colors.grey.shade400),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Sync folder · managed automatically',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade400,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1301,7 +1369,7 @@ class FilesPageState extends State<FilesPage> {
   }
 
   Widget _buildFABs() {
-    if (_isSelectionMode) return const SizedBox.shrink();
+    if (_isSelectionMode || _isSyncFolder) return const SizedBox.shrink();
     return SizedBox(
       width: 56,
       height: 56,
@@ -1426,7 +1494,9 @@ class FilesPageState extends State<FilesPage> {
                               _selectedFiles
                                   .addAll(_files.map((f) => f.id));
                               _selectedFolders
-                                  .addAll(_folders.map((f) => f.id));
+                                  .addAll(_folders
+                                      .where((f) => f.id != _syncFolderUuid)
+                                      .map((f) => f.id));
                             }
                           });
                         },
@@ -1503,7 +1573,9 @@ class FilesPageState extends State<FilesPage> {
                       textColor: textColor,
                       onTap: () {
                         final fileIds = _selectedFiles.toList();
-                        final folderIds = _selectedFolders.toList();
+                        final folderIds = _selectedFolders
+                            .where((id) => id != _syncFolderUuid)
+                            .toList();
                         setState(() {
                           _selectedFiles.clear();
                           _selectedFolders.clear();
@@ -1523,7 +1595,9 @@ class FilesPageState extends State<FilesPage> {
                           MaterialPageRoute(
                             builder: (context) => MoveDestinationScreen(
                               selectedFiles: _selectedFiles.toList(),
-                              selectedFolders: _selectedFolders.toList(),
+                              selectedFolders: _selectedFolders
+                                  .where((id) => id != _syncFolderUuid)
+                                  .toList(),
                               currentFolderId: _currentFolderId,
                             ),
                           ),
@@ -1558,7 +1632,9 @@ class FilesPageState extends State<FilesPage> {
                             try {
                               await HomeRepository().deleteItems(
                                 files: _selectedFiles.toList(),
-                                folders: _selectedFolders.toList(),
+                                folders: _selectedFolders
+                                    .where((id) => id != _syncFolderUuid)
+                                    .toList(),
                               );
                               setState(() {
                                 _selectedFiles.clear();
@@ -1816,6 +1892,35 @@ class FilesPageState extends State<FilesPage> {
     // ── Header & folders section (non-virtualized, small content) ──
     final headerChildren = <Widget>[];
 
+    // ── Sync folder info banner ──
+    if (_isSyncFolder) {
+      headerChildren.add(Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline_rounded,
+                color: Colors.blue.shade600, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                t.syncFolderReadOnly,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.blue.shade700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ));
+    }
+
     if (_showFavourites) {
       headerChildren.add(Row(
         children: [
@@ -1890,13 +1995,15 @@ class FilesPageState extends State<FilesPage> {
     if (_displayFolders.isNotEmpty) {
       headerChildren.add(_buildSectionHeader(
           t.folders, Icons.folder_rounded, _displayFolders.length,
-          trailing: IconButton(
-            icon: const Icon(Icons.create_new_folder_outlined,
-                color: Colors.blue, size: 24),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            onPressed: _showCreateFolderDialog,
-          )));
+          trailing: _isSyncFolder
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.create_new_folder_outlined,
+                      color: Colors.blue, size: 24),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: _showCreateFolderDialog,
+                )));
       if (!_showFavourites && _pinnedFolders.isNotEmpty) {
         headerChildren.add(const SizedBox(height: 8));
         headerChildren.add(_buildPinnedFolders());
@@ -1907,13 +2014,15 @@ class FilesPageState extends State<FilesPage> {
     } else if (!_showFavourites) {
       headerChildren.add(_buildSectionHeader(
           t.folders, Icons.folder_rounded, 0,
-          trailing: IconButton(
-            icon: const Icon(Icons.create_new_folder_outlined,
-                color: Colors.blue, size: 24),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            onPressed: _showCreateFolderDialog,
-          )));
+          trailing: _isSyncFolder
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.create_new_folder_outlined,
+                      color: Colors.blue, size: 24),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: _showCreateFolderDialog,
+                )));
       if (_pinnedFolders.isNotEmpty) {
         headerChildren.add(const SizedBox(height: 8));
         headerChildren.add(_buildPinnedFolders());
@@ -1975,7 +2084,11 @@ class FilesPageState extends State<FilesPage> {
           final pinId = pin['pinId'] as String;
           return GestureDetector(
             onTap: () => _openFolder(folder),
-            onLongPress: () {
+            onLongPress: () async {
+              // Prevent unpin for sync folder
+              final isSyncF = await _isSyncFolderById(folder.id);
+              if (isSyncF || !mounted) return;
+              if (!context.mounted) return;
               showDialog(
                 context: context,
                 builder: (_) => AlertDialog(
@@ -2174,6 +2287,7 @@ class FilesPageState extends State<FilesPage> {
               folder: folder,
               isSelected: _selectedFolders.contains(folder.id),
               isSelectionMode: _isSelectionMode,
+              isSyncFolder: _syncFolderUuid != null && folder.id == _syncFolderUuid,
               onTap: () {
                 if (_isSelectionMode) {
                   _toggleFolderSelection(folder.id);
@@ -2217,6 +2331,7 @@ class FilesPageState extends State<FilesPage> {
             folder: f,
             isSelected: _selectedFolders.contains(f.id),
             isSelectionMode: _isSelectionMode,
+            isSyncFolder: _syncFolderUuid != null && f.id == _syncFolderUuid,
             onTap: () {
               if (_isSelectionMode) {
                 _toggleFolderSelection(f.id);
@@ -2468,6 +2583,7 @@ class _FolderCard extends StatelessWidget {
   final FolderModel folder;
   final bool isSelected;
   final bool isSelectionMode;
+  final bool isSyncFolder;
   final VoidCallback onTap;
   final VoidCallback onSelectTap;
   final VoidCallback onMenuTap;
@@ -2476,6 +2592,7 @@ class _FolderCard extends StatelessWidget {
     required this.folder,
     required this.isSelected,
     required this.isSelectionMode,
+    this.isSyncFolder = false,
     required this.onTap,
     required this.onSelectTap,
     required this.onMenuTap,
@@ -2483,9 +2600,12 @@ class _FolderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: isSelectionMode ? onSelectTap : onTap,
-      onLongPress: onSelectTap,
+    final folderColor = isSyncFolder ? Colors.blue : Colors.amber;
+    return RepaintBoundary(child: GestureDetector(
+      onTap: isSelectionMode
+          ? (isSyncFolder ? null : onSelectTap)
+          : onTap,
+      onLongPress: isSyncFolder ? null : onSelectTap,
       child: Container(
         decoration: BoxDecoration(
           color: isSelected
@@ -2518,13 +2638,13 @@ class _FolderCard extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.15),
+                        color: folderColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.folder_rounded,
-                          color: Colors.amber, size: 22),
+                      child: Icon(Icons.folder_rounded,
+                          color: folderColor, size: 22),
                     ),
-                    if (isSelected)
+                    if (isSelected && !isSyncFolder)
                       Positioned(
                         top: -6,
                         left: -6,
@@ -2543,7 +2663,10 @@ class _FolderCard extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (!isSelectionMode)
+                if (isSyncFolder)
+                  const Icon(Icons.sync_rounded,
+                      color: Colors.blue, size: 20)
+                else if (!isSelectionMode)
                   SizedBox(
                     width: 28,
                     height: 28,
@@ -2571,7 +2694,7 @@ class _FolderCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -2580,6 +2703,7 @@ class _FolderListTile extends StatelessWidget {
   final FolderModel folder;
   final bool isSelected;
   final bool isSelectionMode;
+  final bool isSyncFolder;
   final VoidCallback onTap;
   final VoidCallback onSelectTap;
   final VoidCallback onMenuTap;
@@ -2588,6 +2712,7 @@ class _FolderListTile extends StatelessWidget {
     required this.folder,
     required this.isSelected,
     required this.isSelectionMode,
+    this.isSyncFolder = false,
     required this.onTap,
     required this.onSelectTap,
     required this.onMenuTap,
@@ -2595,7 +2720,8 @@ class _FolderListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final folderColor = isSyncFolder ? Colors.blue : Colors.amber;
+    return RepaintBoundary(child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -2619,11 +2745,13 @@ class _FolderListTile extends StatelessWidget {
               : null,
         ),
         child: ListTile(
-          onTap: isSelectionMode ? onSelectTap : onTap,
-          onLongPress: onSelectTap,
+          onTap: isSelectionMode
+              ? (isSyncFolder ? null : onSelectTap)
+              : onTap,
+          onLongPress: isSyncFolder ? null : onSelectTap,
           contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: isSelectionMode
+          leading: isSelectionMode && !isSyncFolder
               ? InkWell(
             onTap: onSelectTap,
             child: Checkbox(
@@ -2637,11 +2765,11 @@ class _FolderListTile extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.15),
+              color: folderColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.folder_rounded,
-                color: Colors.amber, size: 22),
+            child: Icon(Icons.folder_rounded,
+                color: folderColor, size: 22),
           ),
           title: Text(
             folder.name,
@@ -2651,16 +2779,19 @@ class _FolderListTile extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          trailing: isSelectionMode
-              ? null
-              : IconButton(
-            icon: const Icon(Icons.more_vert,
-                color: Colors.grey, size: 22),
-            onPressed: onMenuTap,
-          ),
+          trailing: isSyncFolder
+              ? const Icon(Icons.sync_rounded,
+              color: Colors.blue, size: 20)
+              : isSelectionMode
+                  ? null
+                  : IconButton(
+              icon: const Icon(Icons.more_vert,
+                  color: Colors.grey, size: 22),
+              onPressed: onMenuTap,
+            ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -2788,7 +2919,7 @@ class _FileTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _color(file.mimeType);
-    return Container(
+    return RepaintBoundary(child: Container(
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -2923,7 +3054,7 @@ class _FileTile extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -2967,7 +3098,7 @@ class _FileGridCard extends StatelessWidget {
     final thumb = file.thumbnailPath;
     final hasPreview = thumb != null && thumb.isNotEmpty;
 
-    return GestureDetector(
+    return RepaintBoundary(child: GestureDetector(
       onTap: isSelectionMode ? onSelectTap : onTap,
       onLongPress: onSelectTap,
       child: Container(
@@ -3124,7 +3255,7 @@ class _FileGridCard extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

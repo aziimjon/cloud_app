@@ -999,6 +999,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Favourite'**
   String get favourite;
+
+  /// No description provided for @syncFolderName.
+  ///
+  /// In en, this message translates to:
+  /// **'📱 Sync'**
+  String get syncFolderName;
+
+  /// No description provided for @syncStatusUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading {uploaded} of {total}'**
+  String syncStatusUploading(int uploaded, int total);
+
+  /// No description provided for @syncStatusWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to sync: {count}'**
+  String syncStatusWaiting(int count);
+
+  /// No description provided for @syncStatusComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync complete'**
+  String get syncStatusComplete;
+
+  /// No description provided for @syncStatusErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} errors'**
+  String syncStatusErrors(int count);
+
+  /// No description provided for @syncSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Sync'**
+  String get syncSettingsTitle;
+
+  /// No description provided for @syncEnableToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable auto sync'**
+  String get syncEnableToggle;
+
+  /// No description provided for @syncWifiOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Wi-Fi only'**
+  String get syncWifiOnly;
+
+  /// No description provided for @syncNowButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get syncNowButton;
+
+  /// No description provided for @syncResetButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset queue'**
+  String get syncResetButton;
+
+  /// No description provided for @syncFolderReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This is your Sync folder. Files here are managed automatically.'**
+  String get syncFolderReadOnly;
+
+  /// No description provided for @syncResetConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset queue?'**
+  String get syncResetConfirmTitle;
+
+  /// No description provided for @syncResetConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'All records will be deleted. The app will re-scan the gallery after that.'**
+  String get syncResetConfirmMessage;
+
+  /// No description provided for @syncResetConfirmButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get syncResetConfirmButton;
+
+  /// No description provided for @syncAutoUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically upload photos and videos'**
+  String get syncAutoUpload;
+
+  /// No description provided for @syncNoMobileData.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not sync over mobile data'**
+  String get syncNoMobileData;
+
+  /// No description provided for @syncStatusTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync status'**
+  String get syncStatusTitle;
+
+  /// No description provided for @syncStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get syncStatusPending;
+
+  /// No description provided for @syncStatusUploading2.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading'**
+  String get syncStatusUploading2;
+
+  /// No description provided for @syncStatusDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get syncStatusDone;
+
+  /// No description provided for @syncStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get syncStatusFailed;
+
+  /// No description provided for @syncStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get syncStop;
 }
 
 class _AppLocalizationsDelegate

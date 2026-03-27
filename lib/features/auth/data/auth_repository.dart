@@ -169,6 +169,77 @@ class AuthRepository {
     }
   }
 
+  // FORGOT PASSWORD → sends OTP, returns otp_key
+  Future<String> forgotPassword({required String phoneNumber}) async {
+    try {
+      final response = await _dio.post(
+        'authentication/users/password/forgot/',
+        data: {'phone_number': phoneNumber},
+      );
+      final data = response.data is Map
+          ? response.data as Map<String, dynamic>
+          : {};
+      final result = data.containsKey('result') ? data['result'] : data;
+      return result['otp_key']?.toString() ?? '';
+    } on DioException catch (e) {
+      throw AppException(
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'User not found',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  // RESEND PASSWORD OTP → returns new otp_key
+  Future<String> resendPasswordOtp({required String phoneNumber}) async {
+    try {
+      final response = await _dio.post(
+        'authentication/users/password/resend/',
+        data: {'phone_number': phoneNumber},
+      );
+      final data = response.data is Map
+          ? response.data as Map<String, dynamic>
+          : {};
+      final result = data.containsKey('result') ? data['result'] : data;
+      return result['otp_key']?.toString() ?? '';
+    } on DioException catch (e) {
+      throw AppException(
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'Resend failed',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
+  // RESET PASSWORD
+  Future<void> resetPassword({
+    required String otpKey,
+    required int otpCode,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    try {
+      await _dio.patch(
+        'authentication/users/password/reset/',
+        data: {
+          'otp_key': otpKey,
+          'otp_code': otpCode,
+          'password': password,
+          'confirm_password': confirmPassword,
+        },
+      );
+    } on DioException catch (e) {
+      throw AppException(
+        message: _extractError(e.response?.data) != 'Unknown error'
+            ? _extractError(e.response?.data)
+            : 'Password reset failed',
+        statusCode: e.response?.statusCode,
+      );
+    }
+  }
+
   // LOGOUT
   Future<void> logout() async {
     await SecureStorage.clearTokens();

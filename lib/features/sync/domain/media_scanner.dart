@@ -12,8 +12,13 @@ import '../data/sync_task.dart';
 class MediaScanner {
   final SyncQueueDb db;
   final Set<String> uploadedKeys;
+  final Set<String>? selectedLocalIds;
 
-  MediaScanner({required this.db, required this.uploadedKeys});
+  MediaScanner({
+    required this.db,
+    required this.uploadedKeys,
+    this.selectedLocalIds,
+  });
 
   /// Scans device gallery, deduplicates, and enqueues new items.
   /// Returns count of newly added pending items.
@@ -54,6 +59,12 @@ class MediaScanner {
 
           for (final asset in assets) {
             try {
+              // Skip if selective sync is on and asset not selected
+              if (selectedLocalIds != null &&
+                  !selectedLocalIds!.contains(asset.id)) {
+                continue;
+              }
+
               // Skip if already in local DB
               if (await db.exists(asset.id)) continue;
 
@@ -127,33 +138,22 @@ class MediaScanner {
     }
   }
 
-  /// Computes SHA-256 hash.
-  /// - Images: full file bytes
-  /// - Videos: first 1MB + file size string appended
+  static const int _isolateHashThreshold = 256 * 1024; // 256KB
+
   Future<String?> _computeHash(AssetEntity asset, File file, int size) async {
     try {
-      Uint8List bytes;
-      if (asset.type == AssetType.video) {
-        // For videos: read first 1MB + append size string
-        const maxBytes = 1024 * 1024; // 1MB
-        final raf = await file.open(mode: FileMode.read);
-        try {
-          final readLength = size < maxBytes ? size : maxBytes;
-          bytes = await raf.read(readLength);
-        } finally {
-          await raf.close();
-        }
-        final sizeBytes = utf8.encode(size.toString());
-        final combined = Uint8List(bytes.length + sizeBytes.length);
-        combined.setRange(0, bytes.length, bytes);
-        combined.setRange(bytes.length, combined.length, sizeBytes);
-        bytes = combined;
-      } else {
-        bytes = await file.readAsBytes();
-      }
+      // Skip hash for missing files
+      if (!file.existsSync()) return null;
 
-      final digest = sha256.convert(bytes);
-      return digest.toString();
+      final isVideo = asset.type == AssetType.video;
+      final args = _HashArgs(file.path, size, isVideo);
+
+      // Use compute() only for files above threshold to avoid isolate overhead
+      if (size > _isolateHashThreshold) {
+        return await compute(_computeHashIsolate, args);
+      } else {
+        return _computeHashIsolate(args);
+      }
     } catch (e) {
       debugPrint('[MediaScanner] Hash computation failed: $e');
       return null;
@@ -169,5 +169,42 @@ class MediaScanner {
       default:
         return 'application/octet-stream';
     }
+  }
+}
+
+// ── Isolate-safe hash computation ───────────────────────────────────────────
+
+class _HashArgs {
+  final String filePath;
+  final int fileSize;
+  final bool isVideo;
+  const _HashArgs(this.filePath, this.fileSize, this.isVideo);
+}
+
+String? _computeHashIsolate(_HashArgs args) {
+  try {
+    final file = File(args.filePath);
+    Uint8List bytes;
+    if (args.isVideo) {
+      const maxBytes = 1024 * 1024;
+      final raf = file.openSync(mode: FileMode.read);
+      try {
+        final readLength = args.fileSize < maxBytes ? args.fileSize : maxBytes;
+        bytes = raf.readSync(readLength);
+      } finally {
+        raf.closeSync();
+      }
+      final sizeBytes = utf8.encode(args.fileSize.toString());
+      final combined = Uint8List(bytes.length + sizeBytes.length);
+      combined.setRange(0, bytes.length, bytes);
+      combined.setRange(bytes.length, combined.length, sizeBytes);
+      bytes = combined;
+    } else {
+      bytes = file.readAsBytesSync();
+    }
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  } catch (_) {
+    return null;
   }
 }

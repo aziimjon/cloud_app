@@ -205,5 +205,43 @@
   },
   "pinLabel": "📌 Закрепить",
   "unpinLabel": "📌 Открепить",
-  "favourite": "Избранное"
+  "favourite": "Избранное",
+  "syncFolderName": "📱 Синхронизация",
+  "syncStatusUploading": "Загружено {uploaded} из {total}",
+  "@syncStatusUploading": {
+    "placeholders": {
+      "uploaded": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "syncStatusWaiting": "Ожидание синхронизации: {count}",
+  "@syncStatusWaiting": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "syncStatusComplete": "Синхронизация завершена",
+  "syncStatusErrors": "Ошибок: {count}",
+  "@syncStatusErrors": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "syncSettingsTitle": "Авто-синхронизация",
+  "syncEnableToggle": "Включить авто-синхронизацию",
+  "syncWifiOnly": "Только по Wi-Fi",
+  "syncNowButton": "Синхронизировать сейчас",
+  "syncResetButton": "Сбросить очередь",
+  "syncFolderReadOnly": "Это папка синхронизации. Файлы здесь управляются автоматически.",
+  "syncResetConfirmTitle": "Сбросить очередь?",
+  "syncResetConfirmMessage": "Все записи будут удалены. После этого приложение заново просканирует галерею.",
+  "syncResetConfirmButton": "Сбросить",
+  "syncAutoUpload": "Автоматически загружать фото и видео",
+  "syncNoMobileData": "Не синхронизировать через мобильные данные",
+  "syncStatusTitle": "Статус синхронизации",
+  "syncStatusPending": "Ожидание",
+  "syncStatusUploading2": "Загрузка",
+  "syncStatusDone": "Готово",
+  "syncStatusFailed": "Ошибки",
+  "syncStop": "Остановить"
 }

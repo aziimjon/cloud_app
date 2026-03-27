@@ -63,8 +63,11 @@ class TusSyncUploader {
 
   /// Uploads a file via TUS protocol and returns the server UUID
   /// extracted from the upload URL.
+  /// [folderId] — if provided, the file will be placed into this folder
+  /// via TUS metadata (matches upload_repository.dart pattern).
   Future<String> upload(
     SyncTask task, {
+    String? folderId,
     void Function(double progress)? onProgress,
   }) async {
     try {
@@ -73,6 +76,8 @@ class TusSyncUploader {
         throw TusUploadException('File not found: ${task.filePath}');
       }
 
+      debugPrint('[Sync] Uploading file → ${task.fileName}');
+
       final xFile = XFile(task.filePath);
       final mimeType =
           lookupMimeType(task.fileName) ?? 'application/octet-stream';
@@ -80,6 +85,7 @@ class TusSyncUploader {
       final metadata = {
         'filename': task.fileName,
         'filetype': mimeType,
+        if (folderId != null) 'folder_id': folderId,
       };
 
       final tempDir = await getTemporaryDirectory();
@@ -130,7 +136,7 @@ class TusSyncUploader {
             'Extracted empty UUID from upload URL: $uploadUrl');
       }
 
-      debugPrint('[TusSyncUploader] UUID extracted: $serverUuid');
+      debugPrint('[Sync] Uploaded → ${task.fileName}, folder=$folderId, uuid=$serverUuid');
       return serverUuid;
     } on TusUploadException {
       rethrow;

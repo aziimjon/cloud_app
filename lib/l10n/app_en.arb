@@ -205,5 +205,43 @@
   },
   "pinLabel": "📌 Pin",
   "unpinLabel": "📌 Unpin",
-  "favourite": "Favourite"
+  "favourite": "Favourite",
+  "syncFolderName": "📱 Sync",
+  "syncStatusUploading": "Uploading {uploaded} of {total}",
+  "@syncStatusUploading": {
+    "placeholders": {
+      "uploaded": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "syncStatusWaiting": "Waiting to sync: {count}",
+  "@syncStatusWaiting": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "syncStatusComplete": "Sync complete",
+  "syncStatusErrors": "{count} errors",
+  "@syncStatusErrors": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "syncSettingsTitle": "Auto Sync",
+  "syncEnableToggle": "Enable auto sync",
+  "syncWifiOnly": "Wi-Fi only",
+  "syncNowButton": "Sync now",
+  "syncResetButton": "Reset queue",
+  "syncFolderReadOnly": "This is your Sync folder. Files here are managed automatically.",
+  "syncResetConfirmTitle": "Reset queue?",
+  "syncResetConfirmMessage": "All records will be deleted. The app will re-scan the gallery after that.",
+  "syncResetConfirmButton": "Reset",
+  "syncAutoUpload": "Automatically upload photos and videos",
+  "syncNoMobileData": "Do not sync over mobile data",
+  "syncStatusTitle": "Sync status",
+  "syncStatusPending": "Pending",
+  "syncStatusUploading2": "Uploading",
+  "syncStatusDone": "Done",
+  "syncStatusFailed": "Errors",
+  "syncStop": "Stop"
 }

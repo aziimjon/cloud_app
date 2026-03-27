@@ -477,4 +477,78 @@ class AppLocalizationsUz extends AppLocalizations {
 
   @override
   String get favourite => 'Favourite';
+
+  @override
+  String get syncFolderName => '📱 Sinxronizatsiya';
+
+  @override
+  String syncStatusUploading(int uploaded, int total) {
+    return '$total tadan $uploaded yuklandi';
+  }
+
+  @override
+  String syncStatusWaiting(int count) {
+    return 'Sinxronizatsiya kutilmoqda: $count';
+  }
+
+  @override
+  String get syncStatusComplete => 'Sinxronizatsiya tugadi';
+
+  @override
+  String syncStatusErrors(int count) {
+    return '$count ta xato';
+  }
+
+  @override
+  String get syncSettingsTitle => 'Avtomatik sinxronizatsiya';
+
+  @override
+  String get syncEnableToggle => 'Avtomatik sinxronizatsiyani yoqish';
+
+  @override
+  String get syncWifiOnly => 'Faqat Wi-Fi orqali';
+
+  @override
+  String get syncNowButton => 'Hozir sinxronlashtirish';
+
+  @override
+  String get syncResetButton => 'Navbatni tozalash';
+
+  @override
+  String get syncFolderReadOnly =>
+      'Bu sinxronizatsiya papkasi. Fayllar avtomatik boshqariladi.';
+
+  @override
+  String get syncResetConfirmTitle => 'Navbatni tozalash?';
+
+  @override
+  String get syncResetConfirmMessage =>
+      'Barcha yozuvlar o\'chiriladi. Ilova galereyani qaytadan skanerlaydi.';
+
+  @override
+  String get syncResetConfirmButton => 'Tozalash';
+
+  @override
+  String get syncAutoUpload => 'Rasmlar va videolarni avtomatik yuklash';
+
+  @override
+  String get syncNoMobileData => 'Mobil internet orqali sinxronlamaslik';
+
+  @override
+  String get syncStatusTitle => 'Sinxronizatsiya holati';
+
+  @override
+  String get syncStatusPending => 'Kutilmoqda';
+
+  @override
+  String get syncStatusUploading2 => 'Yuklanmoqda';
+
+  @override
+  String get syncStatusDone => 'Tayyor';
+
+  @override
+  String get syncStatusFailed => 'Xatolar';
+
+  @override
+  String get syncStop => 'To\'xtatish';
 }

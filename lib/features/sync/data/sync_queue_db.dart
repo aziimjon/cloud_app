@@ -74,6 +74,24 @@ class SyncQueueDb {
     }
   }
 
+  /// Returns pending tasks sorted by created_at ASC (oldest first).
+  /// Mirrors Google Photos upload order.
+  Future<List<SyncTask>> getPendingOldestFirst({int limit = 10}) async {
+    try {
+      final rows = await _database.query(
+        'sync_queue',
+        where: 'status = ?',
+        whereArgs: ['pending'],
+        orderBy: 'created_at ASC',
+        limit: limit,
+      );
+      return rows.map((r) => SyncTask.fromMap(r)).toList();
+    } catch (e) {
+      debugPrint('[SyncQueueDb] getPendingOldestFirst failed: $e');
+      return [];
+    }
+  }
+
   Future<void> markUploading(int id) async {
     try {
       await _database.update(

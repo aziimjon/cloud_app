@@ -39,6 +39,7 @@ dependencies:
   sqflite: ^2.3.2
   photo_manager: ^3.0.0
   crypto: ^3.0.3
+  uuid: ^4.4.0
 
 dev_dependencies:
   flutter_test:
