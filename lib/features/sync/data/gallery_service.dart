@@ -166,14 +166,14 @@ class GalleryService {
         data: {'files': filesPayload},
       );
 
-      // Response: [{ uuid: string, is_duplicate: bool }]
+      // Response: [{"key": "uuid-string", "value": true/false}]
       final List result = response.data as List;
 
       // Map: localTaskId → is_duplicate
       final Map<String, bool> duplicateMap = {};
       for (final item in result) {
-        final uuid = item['uuid'].toString();
-        final isDuplicate = item['is_duplicate'] as bool;
+        final uuid = item['key'].toString();
+        final isDuplicate = item['value'] as bool;
         if (uuidToTask.containsKey(uuid)) {
           final task = uuidToTask[uuid]!;
           duplicateMap[task.localId] = isDuplicate;

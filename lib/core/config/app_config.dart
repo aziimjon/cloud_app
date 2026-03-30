@@ -13,6 +13,7 @@ class AppConfig {
 
   static late AppConfig instance;
 
+
   static void initialize(Environment env) {
     switch (env) {
       case Environment.dev:
@@ -32,3 +33,4 @@ class AppConfig {
     }
   }
 }
+

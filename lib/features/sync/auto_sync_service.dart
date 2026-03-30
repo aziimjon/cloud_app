@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +11,7 @@ import 'data/sync_queue_db.dart';
 import 'data/tus_sync_uploader.dart';
 import 'domain/media_scanner.dart';
 import '../home/data/home_repository.dart';
+import '../home/data/models/folder_model.dart';
 
 class SyncProgress {
   final int pending;
@@ -45,8 +45,6 @@ class AutoSyncService {
 
   static const String _kColdStartKey = 'sync_cold_start_done';
   static const String _kAutoSyncEnabledKey = 'auto_sync_enabled';
-  static const String _kSyncFolderUuidKey = 'sync_folder_uuid';
-  static const String _kSyncFolderPinnedKey = 'sync_folder_pinned';
 
   final SyncQueueDb _db = SyncQueueDb();
   final StreamController<SyncProgress> _progressController =
@@ -115,86 +113,6 @@ class AutoSyncService {
     await _emitProgress();
   }
 
-  /// Ensures the "📱 Sync" folder exists on the server.
-  /// On first run creates it, pins it, saves UUID.
-  /// On subsequent runs verifies server-side existence.
-  Future<String?> _ensureSyncFolder() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Check if we have a saved UUID
-    final existing = prefs.getString(_kSyncFolderUuidKey);
-    if (existing != null && existing.isNotEmpty) {
-      // Verify folder still exists on server
-      try {
-        final repo = HomeRepository();
-        final exists = await repo.folderExists(existing);
-        if (exists) {
-          debugPrint('[Sync] Sync folder verified on server: $existing');
-          // Ensure it is pinned
-          await _ensurePinned(existing);
-          return existing;
-        }
-        // Folder was deleted on server — clear and recreate
-        debugPrint('[Sync] Sync folder $existing missing on server, recreating');
-        await prefs.remove(_kSyncFolderUuidKey);
-        await prefs.remove(_kSyncFolderPinnedKey);
-      } catch (e) {
-        debugPrint('[Sync] Could not verify folder existence: $e');
-        // If we can't verify, assume it exists and try to use it
-        return existing;
-      }
-    }
-
-    final token = await SecureStorage.getAccessToken();
-    if (token == null || token.isEmpty) return null;
-
-    final dio = Dio(BaseOptions(baseUrl: AppConfig.instance.baseUrl));
-
-    try {
-      // Step 1: Create folder
-      final createResponse = await dio.post(
-        '/content/folder/',
-        data: {'name': '📱 Sync'},
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-      final folderUuid = createResponse.data['id'].toString();
-      debugPrint('[Sync] Sync folder created: $folderUuid');
-
-      // Step 2: Pin folder
-      await _ensurePinned(folderUuid);
-
-      // Step 3: Save UUID
-      await prefs.setString(_kSyncFolderUuidKey, folderUuid);
-      return folderUuid;
-    } catch (e) {
-      debugPrint('[Sync] _ensureSyncFolder failed: $e');
-      return null;
-    }
-  }
-
-  /// Ensures the sync folder is pinned. Silently ignores errors (e.g. already pinned).
-  Future<void> _ensurePinned(String folderUuid) async {
-    final prefs = await SharedPreferences.getInstance();
-    final alreadyPinned = prefs.getBool(_kSyncFolderPinnedKey) ?? false;
-    if (alreadyPinned) return;
-
-    final token = await SecureStorage.getAccessToken();
-    if (token == null) return;
-
-    try {
-      final dio = Dio(BaseOptions(baseUrl: AppConfig.instance.baseUrl));
-      await dio.post(
-        '/content/pinned-folders/',
-        data: {'folder': folderUuid},
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-      await prefs.setBool(_kSyncFolderPinnedKey, true);
-      debugPrint('[Sync] Sync folder pinned: $folderUuid');
-    } catch (e) {
-      debugPrint('[Sync] Pin attempt (non-critical): $e');
-    }
-  }
-
   /// Starts processing the pending upload queue.
   Future<void> startSync() async {
     if (_isRunning) return;
@@ -214,20 +132,31 @@ class AutoSyncService {
     _currentFileName = null;
 
     try {
-      // Step 1: Ensure Sync folder exists and is pinned
-      final syncFolderUuid = await _ensureSyncFolder();
-      debugPrint('[Sync] Session $sessionId using folder: $syncFolderUuid');
+      // Step 1: Resolve sync folder via server (idempotent — never duplicates)
+      final repo = HomeRepository();
+      final syncFolder = await repo.resolveSyncFolder();
+      final syncFolderUuid = syncFolder.id;
+      debugPrint('[Sync] Session $sessionId using folder: $syncFolderUuid (isSync: ${syncFolder.isSync})');
 
-      if (syncFolderUuid == null) {
-        debugPrint('[Sync][ERROR] Could not create/find Sync folder. Aborting.');
-        return;
+      // Step 2: Ensure sync folder is pinned (silent, non-critical)
+      try {
+        final pinnedFolders = await repo.getPinnedFolders();
+        final alreadyPinned = pinnedFolders.any(
+          (p) => (p['folder'] as FolderModel?)?.id == syncFolderUuid,
+        );
+        if (!alreadyPinned) {
+          await repo.pinFolder(syncFolderUuid);
+          debugPrint('[Sync] Sync folder pinned: $syncFolderUuid');
+        }
+      } catch (e) {
+        debugPrint('[Sync] Pin attempt (non-critical): $e');
       }
 
       final galleryService = GalleryService(
         baseUrl: AppConfig.instance.baseUrl,
         token: token,
       );
-      final uploader = TusSyncUploader(authToken: token);
+      final uploader = TusSyncUploader();
 
       while (_isRunning && sessionId == _syncSessionId) {
         // Get pending tasks sorted oldest first
@@ -239,7 +168,7 @@ class AutoSyncService {
 
         _totalInBatch = tasks.length;
 
-        // Step 2: Check duplicates in batch (fail-safe: on error, upload all)
+        // Step 3: Check duplicates in batch (fail-safe: on error, upload all)
         Map<String, bool> duplicateMap;
         try {
           duplicateMap = await galleryService.checkDuplicates(tasks);
@@ -252,7 +181,7 @@ class AutoSyncService {
           if (!_isRunning || sessionId != _syncSessionId) break;
           if (task.id == null) continue;
 
-          // Step 3: Skip duplicates
+          // Step 4: Skip duplicates
           final isDuplicate = duplicateMap[task.localId] ?? false;
           if (isDuplicate) {
             await _db.markDone(task.id!, 'duplicate_skipped');
@@ -262,7 +191,7 @@ class AutoSyncService {
             continue;
           }
 
-          // Step 4: Verify file still exists on disk before upload
+          // Step 5: Verify file still exists on disk before upload
           final file = File(task.filePath);
           if (!file.existsSync()) {
             await _db.markFailed(task.id!);
@@ -272,7 +201,7 @@ class AutoSyncService {
             continue;
           }
 
-          // Step 5: Upload new file INTO sync folder
+          // Step 6: Upload new file INTO sync folder
           _currentFileName = task.fileName;
           await _db.markUploading(task.id!);
           await _emitProgress(currentProgress: 0.0);
@@ -322,8 +251,6 @@ class AutoSyncService {
     await _db.reset();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kColdStartKey);
-    await prefs.remove(_kSyncFolderUuidKey);
-    await prefs.remove(_kSyncFolderPinnedKey);
     debugPrint('[AutoSync] Logout: queue cleared');
   }
 
@@ -365,4 +292,3 @@ class AutoSyncService {
     ));
   }
 }
-

@@ -21,7 +21,7 @@ import '../../share/data/repository/share_repository_impl.dart';
 import '../../share/data/remote/share_remote_data_source_impl.dart';
 import '../../share/presentation/widgets/share_dialog.dart';
 import '../../profile/data/profile_repository.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 
 enum _FilterType { all, images, videos }
 
@@ -50,7 +50,7 @@ class FilesPageState extends State<FilesPage> {
   final Map<String, double> _downloadProgress = {};
   final Map<String, int> _downloadReceivedBytes = {};
 
-  final List<({String id, String name})> _breadcrumb = [];
+  final List<({String id, String name, bool isSync})> _breadcrumb = [];
 
   bool _showFavourites = false;
   _FilterType _activeFilter = _FilterType.all;
@@ -69,8 +69,8 @@ class FilesPageState extends State<FilesPage> {
   int _folderPage = 0;
   int _totalFilesCount = 0;
   late final ShareBloc _shareBloc;
-  bool _isSyncFolder = false;
-  String? _syncFolderUuid;
+  bool get _isSyncFolder =>
+      _breadcrumb.isNotEmpty && _breadcrumb.last.isSync;
 
   String _fmt(dynamic b) {
     if (b == null) return '0 KB';
@@ -161,7 +161,7 @@ class FilesPageState extends State<FilesPage> {
 
   void _toggleFolderSelection(String id) {
     // Sync folder cannot be selected
-    if (_syncFolderUuid != null && id == _syncFolderUuid) return;
+    if (_folders.any((f) => f.id == id && f.isSync)) return;
     setState(() {
       if (_selectedFolders.contains(id)) {
         _selectedFolders.remove(id);
@@ -332,7 +332,6 @@ class FilesPageState extends State<FilesPage> {
         _totalFilesCount = result['totalCount'] as int? ?? _files.length;
         _isLoading = false;
       });
-      _checkSyncFolder();
 
     } on AppException catch (e) {
       if (!mounted) return;
@@ -430,50 +429,15 @@ class FilesPageState extends State<FilesPage> {
 
   void _openFolder(FolderModel folder) {
     setState(() {
-      _breadcrumb.add((id: folder.id, name: folder.name));
+      _breadcrumb.add((id: folder.id, isSync: false, name: folder.name));
       _showFavourites = false;
       _activeFilter = _FilterType.all;
       _folderPage = 0;
-      _isSyncFolder = false;
     });
     widget.onFolderChanged?.call(folder.id);
     _loadContent();
   }
 
-  Future<void> _checkSyncFolder() async {
-    final folderId = _currentFolderId;
-    if (folderId == null) {
-      if (_isSyncFolder) setState(() => _isSyncFolder = false);
-      // Still load the cached UUID for UI purposes
-      if (_syncFolderUuid == null) {
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          _syncFolderUuid = prefs.getString('sync_folder_uuid');
-        } catch (_) {}
-      }
-      return;
-    }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final syncUuid = prefs.getString('sync_folder_uuid');
-      _syncFolderUuid = syncUuid;
-      final isSync = syncUuid != null && syncUuid == folderId;
-      if (mounted && isSync != _isSyncFolder) {
-        setState(() => _isSyncFolder = isSync);
-      }
-    } catch (_) {}
-  }
-
-  /// Sync check for a specific folder ID (used in folder action sheets).
-  Future<bool> _isSyncFolderById(String folderId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final syncUuid = prefs.getString('sync_folder_uuid');
-      return syncUuid != null && syncUuid == folderId;
-    } catch (_) {
-      return false;
-    }
-  }
 
   void _navigateTo(int index) {
     if (index < 0) {
@@ -481,7 +445,6 @@ class FilesPageState extends State<FilesPage> {
       setState(() {
         _breadcrumb.clear();
         _folderPage = 0;
-        _isSyncFolder = false;
       });
       widget.onFolderChanged?.call(null);
     } else {
@@ -745,9 +708,9 @@ class FilesPageState extends State<FilesPage> {
     );
   }
 
-  void _showFolderMenu(FolderModel folder) async {
+  void _showFolderMenu(FolderModel folder) {
     final t = AppLocalizations.of(context)!;
-    final isSyncF = await _isSyncFolderById(folder.id);
+    final isSyncF = folder.isSync;
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
@@ -936,23 +899,15 @@ class FilesPageState extends State<FilesPage> {
                 ],
                 if (isSyncF)
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
-                    child: Row(
-                      children: [
-                        Icon(Icons.lock_outline,
-                            size: 14,
-                            color: Colors.grey.shade400),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Sync folder · managed automatically',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade400,
-                            fontStyle: FontStyle.italic,
-                          ),
+                    padding: const EdgeInsets.only(bottom: 12, top: 4),
+                    child: Center(
+                      child: Text(
+                        'Sync folder · managed automatically',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
                         ),
-                      ],
+                      ),
                     ),
                   ),
               ],
@@ -1495,7 +1450,7 @@ class FilesPageState extends State<FilesPage> {
                                   .addAll(_files.map((f) => f.id));
                               _selectedFolders
                                   .addAll(_folders
-                                      .where((f) => f.id != _syncFolderUuid)
+                                      .where((f) => !f.isSync)
                                       .map((f) => f.id));
                             }
                           });
@@ -1574,7 +1529,7 @@ class FilesPageState extends State<FilesPage> {
                       onTap: () {
                         final fileIds = _selectedFiles.toList();
                         final folderIds = _selectedFolders
-                            .where((id) => id != _syncFolderUuid)
+                            .where((id) => !_folders.any((f) => f.id == id && f.isSync))
                             .toList();
                         setState(() {
                           _selectedFiles.clear();
@@ -1596,7 +1551,7 @@ class FilesPageState extends State<FilesPage> {
                             builder: (context) => MoveDestinationScreen(
                               selectedFiles: _selectedFiles.toList(),
                               selectedFolders: _selectedFolders
-                                  .where((id) => id != _syncFolderUuid)
+                                  .where((id) => !_folders.any((f) => f.id == id && f.isSync))
                                   .toList(),
                               currentFolderId: _currentFolderId,
                             ),
@@ -1633,7 +1588,7 @@ class FilesPageState extends State<FilesPage> {
                               await HomeRepository().deleteItems(
                                 files: _selectedFiles.toList(),
                                 folders: _selectedFolders
-                                    .where((id) => id != _syncFolderUuid)
+                                    .where((id) => !_folders.any((f) => f.id == id && f.isSync))
                                     .toList(),
                               );
                               setState(() {
@@ -2084,10 +2039,9 @@ class FilesPageState extends State<FilesPage> {
           final pinId = pin['pinId'] as String;
           return GestureDetector(
             onTap: () => _openFolder(folder),
-            onLongPress: () async {
+            onLongPress: () {
               // Prevent unpin for sync folder
-              final isSyncF = await _isSyncFolderById(folder.id);
-              if (isSyncF || !mounted) return;
+              if (folder.isSync) return;
               if (!context.mounted) return;
               showDialog(
                 context: context,
@@ -2128,7 +2082,7 @@ class FilesPageState extends State<FilesPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.push_pin,
+                  Icon(folder.isSync ? Icons.sync_rounded : Icons.push_pin,
                       size: 14, color: Colors.blue),
                   const SizedBox(width: 4),
                   Text(
@@ -2287,7 +2241,7 @@ class FilesPageState extends State<FilesPage> {
               folder: folder,
               isSelected: _selectedFolders.contains(folder.id),
               isSelectionMode: _isSelectionMode,
-              isSyncFolder: _syncFolderUuid != null && folder.id == _syncFolderUuid,
+              isSyncFolder: folder.isSync,
               onTap: () {
                 if (_isSelectionMode) {
                   _toggleFolderSelection(folder.id);
@@ -2331,7 +2285,7 @@ class FilesPageState extends State<FilesPage> {
             folder: f,
             isSelected: _selectedFolders.contains(f.id),
             isSelectionMode: _isSelectionMode,
-            isSyncFolder: _syncFolderUuid != null && f.id == _syncFolderUuid,
+            isSyncFolder: f.isSync,
             onTap: () {
               if (_isSelectionMode) {
                 _toggleFolderSelection(f.id);
@@ -2638,12 +2592,27 @@ class _FolderCard extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: folderColor.withValues(alpha: 0.15),
+                        color: folderColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(Icons.folder_rounded,
                           color: folderColor, size: 22),
                     ),
+                    if (isSyncFolder)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: const BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.sync_rounded,
+                              color: Colors.white, size: 11),
+                        ),
+                      ),
                     if (isSelected && !isSyncFolder)
                       Positioned(
                         top: -6,
@@ -2664,8 +2633,8 @@ class _FolderCard extends StatelessWidget {
                   ],
                 ),
                 if (isSyncFolder)
-                  const Icon(Icons.sync_rounded,
-                      color: Colors.blue, size: 20)
+                  const Icon(Icons.lock_outline_rounded,
+                      color: Colors.grey, size: 18)
                 else if (!isSelectionMode)
                   SizedBox(
                     width: 28,
@@ -2780,8 +2749,8 @@ class _FolderListTile extends StatelessWidget {
             ),
           ),
           trailing: isSyncFolder
-              ? const Icon(Icons.sync_rounded,
-              color: Colors.blue, size: 20)
+              ? const Icon(Icons.lock_outline_rounded,
+                  color: Colors.grey, size: 18)
               : isSelectionMode
                   ? null
                   : IconButton(

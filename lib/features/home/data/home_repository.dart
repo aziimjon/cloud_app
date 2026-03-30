@@ -6,10 +6,12 @@ import '../../../core/errors/app_exception.dart';
 import 'models/folder_model.dart';
 import 'models/file_model.dart';
 import '../../../core/storage/secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeRepository {
   final Dio _dio = DioClient.instance;
+
+  /// Cached root folders for sync-folder guard checks (last resort).
+  List<FolderModel> _cachedRootFolders = [];
 
   String _extractError(dynamic data) {
     if (data == null) return 'Unknown error';
@@ -63,6 +65,11 @@ class HomeRepository {
       final int totalCount = responseData is Map
           ? (responseData['count'] as int? ?? results.length)
           : results.length;
+
+      // Cache root folders for sync-folder guards
+      if (parentId == null) {
+        _cachedRootFolders = folders;
+      }
 
       return {
         'folders': folders,
@@ -123,16 +130,49 @@ class HomeRepository {
     }
   }
 
+  /// Idempotent sync folder resolution — the ONLY place sync folder
+  /// may be created. Checks server for existing is_sync folder first.
+  Future<FolderModel> resolveSyncFolder() async {
+    final result = await getContent(parentId: null);
+    final folders = result['folders'] as List<FolderModel>;
+    for (int i = 0; i < folders.length; i++) {
+      final folder = folders[i];
+      if (folder.isSync || folder.name == 'Sync') {
+        debugPrint('[HomeRepo] Sync folder found: ${folder.id}');
+        if (!folder.isSync) {
+          // Обновляем "локальную БД" (кэш), устанавливая isSync = true
+          final updatedFolder = folder.copyWith(isSync: true);
+          final cacheIndex = _cachedRootFolders.indexWhere((f) => f.id == folder.id);
+          if (cacheIndex != -1) {
+            _cachedRootFolders[cacheIndex] = updatedFolder;
+          }
+          return updatedFolder;
+        }
+        return folder;
+      }
+    }
+    // Not found on server — create it (server sets is_sync: true)
+    debugPrint('[HomeRepo] No sync folder found, creating...');
+    try {
+      final response = await _dio.post(
+        '/content/folder/',
+        data: {'name': 'Sync', 'parent': null},
+      );
+      return FolderModel.fromJson(response.data);
+    } catch (e) {
+      debugPrint('[HomeRepo] Create sync folder failed: $e');
+      rethrow;
+    }
+  }
+
   Future<void> renameItem({
     required String type,
     required String id,
     required String name,
   }) async {
-    // Guard: sync folder cannot be renamed
+    // Guard: sync folder cannot be renamed (last-resort check)
     if (type == 'folder') {
-      final prefs = await SharedPreferences.getInstance();
-      final syncUuid = prefs.getString('sync_folder_uuid');
-      if (syncUuid != null && syncUuid == id) {
+      if (_cachedRootFolders.any((f) => f.id == id && f.isSync)) {
         throw const AppException(message: 'Cannot modify sync folder');
       }
     }
@@ -154,11 +194,9 @@ class HomeRepository {
     if (type == 'folder' && isSystem) {
       throw const AppException(message: 'Cannot delete system folder');
     }
-    // Guard: sync folder cannot be deleted
+    // Guard: sync folder cannot be deleted (last-resort check)
     if (type == 'folder') {
-      final prefs = await SharedPreferences.getInstance();
-      final syncUuid = prefs.getString('sync_folder_uuid');
-      if (syncUuid != null && syncUuid == id) {
+      if (_cachedRootFolders.any((f) => f.id == id && f.isSync)) {
         throw const AppException(message: 'Cannot modify sync folder');
       }
     }
@@ -184,11 +222,16 @@ class HomeRepository {
   }) async {
     // Guard: filter out sync folder from bulk deletion
     if (folders.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      final syncUuid = prefs.getString('sync_folder_uuid');
-      if (syncUuid != null && folders.contains(syncUuid)) {
-        folders = List<String>.from(folders)..remove(syncUuid);
-        debugPrint('[HomeRepository] Blocked sync folder from bulk delete');
+      final syncIds = _cachedRootFolders
+          .where((f) => f.isSync)
+          .map((f) => f.id)
+          .toSet();
+      if (syncIds.isNotEmpty) {
+        final before = folders.length;
+        folders = folders.where((id) => !syncIds.contains(id)).toList();
+        if (folders.length < before) {
+          debugPrint('[HomeRepository] Blocked sync folder from bulk delete');
+        }
       }
     }
     try {

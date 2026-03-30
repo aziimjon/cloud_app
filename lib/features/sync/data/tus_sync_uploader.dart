@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:tus_client/tus_client.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/storage/secure_storage.dart';
 import 'sync_task.dart';
 
 class TusUploadException implements Exception {
@@ -57,9 +58,7 @@ class _SyncTusDiskStore extends TusStore {
 }
 
 class TusSyncUploader {
-  final String authToken;
-
-  TusSyncUploader({required this.authToken});
+  TusSyncUploader();
 
   /// Uploads a file via TUS protocol and returns the server UUID
   /// extracted from the upload URL.
@@ -76,6 +75,18 @@ class TusSyncUploader {
         throw TusUploadException('File not found: ${task.filePath}');
       }
 
+      // Fresh token on every upload — matches UploadRepository pattern.
+      // Prevents 400 from stale/expired tokens during long batch runs.
+      final token = await SecureStorage.getAccessToken();
+      if (token == null || token.isEmpty) {
+        throw TusUploadException('No auth token available');
+      }
+
+      final userId = await SecureStorage.getUserId();
+      if (userId == null) {
+        throw TusUploadException('No valid user ID found for upload');
+      }
+
       debugPrint('[Sync] Uploading file → ${task.fileName}');
 
       final xFile = XFile(task.filePath);
@@ -85,6 +96,7 @@ class TusSyncUploader {
       final metadata = {
         'filename': task.fileName,
         'filetype': mimeType,
+        'owner': userId,
         if (folderId != null) 'folder_id': folderId,
       };
 
@@ -98,7 +110,7 @@ class TusSyncUploader {
         Uri.parse(tusUrl),
         xFile,
         store: store,
-        headers: {'Authorization': 'Bearer $authToken'},
+        headers: {'Authorization': 'Bearer $token'},
         metadata: metadata,
         maxChunkSize: 512 * 1024,
       );
