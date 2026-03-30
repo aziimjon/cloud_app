@@ -14,7 +14,7 @@ class SyncQueueDb {
       final path = p.join(dbPath, 'sync_queue.db');
       _db = await openDatabase(
         path,
-        version: 1,
+        version: 2,
         onCreate: (db, version) async {
           await db.execute('''
             CREATE TABLE sync_queue (
@@ -25,6 +25,7 @@ class SyncQueueDb {
               file_size INTEGER NOT NULL,
               mime_type TEXT NOT NULL,
               sha256 TEXT,
+              session_id TEXT,
               status TEXT NOT NULL DEFAULT 'pending',
               retry_count INTEGER NOT NULL DEFAULT 0,
               server_uuid TEXT,
@@ -32,6 +33,12 @@ class SyncQueueDb {
               updated_at INTEGER NOT NULL
             )
           ''');
+        },
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await db.execute('ALTER TABLE sync_queue ADD COLUMN session_id TEXT');
+            debugPrint('[SyncQueueDb] Migrated to v2: added session_id column');
+          }
         },
       );
       debugPrint('[SyncQueueDb] Database initialized');
@@ -196,6 +203,33 @@ class SyncQueueDb {
     } catch (e) {
       debugPrint('[SyncQueueDb] getStatusCounts failed: $e');
       return {'pending': 0, 'uploading': 0, 'done': 0, 'failed': 0};
+    }
+  }
+
+  /// Count tasks by status. Pass null status to count ALL tasks.
+  /// If sessionId is provided, filters by that session only.
+  /// If sessionId is null, counts across all sessions (backward compat).
+  Future<int> countByStatus(String? status, {String? sessionId}) async {
+    try {
+      final where = <String>[];
+      final args = <dynamic>[];
+      if (status != null) {
+        where.add('status = ?');
+        args.add(status);
+      }
+      if (sessionId != null) {
+        where.add('session_id = ?');
+        args.add(sessionId);
+      }
+      final whereClause = where.isEmpty ? '' : 'WHERE ${where.join(' AND ')}';
+      final result = await _database.rawQuery(
+        'SELECT COUNT(*) as count FROM sync_queue $whereClause',
+        args,
+      );
+      return Sqflite.firstIntValue(result) ?? 0;
+    } catch (e) {
+      debugPrint('[SyncQueueDb] countByStatus failed: $e');
+      return 0;
     }
   }
 

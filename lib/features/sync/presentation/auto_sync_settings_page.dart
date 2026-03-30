@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_app/l10n/app_localizations.dart';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 import '../auto_sync_service.dart';
 
@@ -20,28 +24,16 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
   bool _autoSyncEnabled = false;
   bool _wifiOnly = false;
   bool _useSelectedFiles = false; // 👈 НОВОЕ
-  bool _isSyncing = false;
 
   List<String> _selectedFiles = []; // 👈 НОВОЕ
 
-  StreamSubscription<SyncProgress>? _progressSub;
-  SyncProgress _lastProgress = const SyncProgress();
+  TimeOfDay? _syncTime;
+  List<int> _syncDays = [];
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
-
-    _progressSub = _syncService.progressStream.listen((progress) {
-      if (mounted) {
-        setState(() {
-          _lastProgress = progress;
-          _isSyncing = _syncService.isRunning;
-        });
-      }
-    });
-
-    _isSyncing = _syncService.isRunning;
   }
 
   Future<void> _loadPrefs() async {
@@ -55,6 +47,15 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
             prefs.getBool('auto_sync_selected_only') ?? false;
         _selectedFiles =
             prefs.getStringList('selected_files') ?? [];
+        
+        final hour = prefs.getInt('sync_time_hour');
+        final minute = prefs.getInt('sync_time_minute');
+        if (hour != null && minute != null) {
+          _syncTime = TimeOfDay(hour: hour, minute: minute);
+        }
+        
+        final daysStr = prefs.getStringList('sync_days') ?? [];
+        _syncDays = daysStr.map(int.parse).toList();
       });
     }
   }
@@ -87,7 +88,7 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
     final files = await Navigator.push<List<String>>(
       context,
       MaterialPageRoute(
-        builder: (_) => const _DummyPickerPage(),
+        builder: (_) => _GalleryPickerPage(_selectedFiles),
       ),
     );
 
@@ -99,8 +100,55 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
     }
   }
 
+  Future<void> _pickTime() async {
+    final t = await showTimePicker(
+      context: context,
+      initialTime: _syncTime ?? TimeOfDay.now(),
+    );
+    if (t != null) {
+      setState(() => _syncTime = t);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('sync_time_hour', t.hour);
+      await prefs.setInt('sync_time_minute', t.minute);
+      _scheduleSync();
+    }
+  }
+
+  Future<void> _toggleDay(int dayIndex) async {
+    setState(() {
+      if (_syncDays.contains(dayIndex)) {
+        _syncDays.remove(dayIndex);
+      } else {
+        _syncDays.add(dayIndex);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('sync_days', _syncDays.map((d) => d.toString()).toList());
+    _scheduleSync();
+  }
+
+  void _scheduleSync() {
+    if (_syncTime == null || _syncDays.isEmpty) {
+      AndroidAlarmManager.cancel(1);
+      return;
+    }
+    final now = DateTime.now();
+    var scheduled = DateTime(now.year, now.month, now.day, _syncTime!.hour, _syncTime!.minute);
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    AndroidAlarmManager.periodic(
+      const Duration(days: 1),
+      1,
+      backgroundSyncCallback,
+      startAt: scheduled,
+      exact: true,
+      wakeup: true,
+      rescheduleOnReboot: true,
+    );
+  }
+
   Future<void> _startSync() async {
-    setState(() => _isSyncing = true);
 
     // 👇 используем новый метод
     await _syncService.startAutoSync();
@@ -108,7 +156,6 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
 
   Future<void> _stopSync() async {
     await _syncService.stopSync();
-    if (mounted) setState(() => _isSyncing = false);
   }
 
   Future<void> _resetQueue() async {
@@ -145,13 +192,13 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
 
   @override
   void dispose() {
-    _progressSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final isRunning = context.watch<SyncNotifier>().isRunning;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F7FA);
@@ -199,6 +246,33 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
                     value: _useSelectedFiles,
                     onChanged: _setUseSelected,
                   ),
+                  const Divider(height: 1),
+
+                  // 👇 Таймер Авто-Синхронизации
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Время синхронизации'),
+                    subtitle: Text(_syncTime != null 
+                      ? '${_syncTime!.hour.toString().padLeft(2, '0')}:${_syncTime!.minute.toString().padLeft(2, '0')}' 
+                      : 'Не установлено'),
+                    trailing: const Icon(Icons.access_time, color: _accent),
+                    onTap: _pickTime,
+                  ),
+                  Wrap(
+                    spacing: 4,
+                    children: List.generate(7, (i) {
+                      final day = i + 1;
+                      final isSelected = _syncDays.contains(day);
+                      final dayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+                      return FilterChip(
+                        label: Text(dayNames[i], style: const TextStyle(fontSize: 12)),
+                        selected: isSelected,
+                        selectedColor: _accent.withValues(alpha: 0.2),
+                        checkmarkColor: _accent,
+                        onSelected: (_) => _toggleDay(day),
+                      );
+                    }),
+                  ),
                 ],
               ),
             ),
@@ -207,81 +281,77 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
 
             _buildCard(
               cardColor: cardColor,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              child: Consumer<SyncNotifier>(
+                builder: (context, notifier, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.sync, color: _accent, size: 20),
-                      const SizedBox(width: 8),
-                      Text(t.syncStatusTitle),
-                      const Spacer(),
-                      if (_isSyncing)
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: _accent,
+                      Row(
+                        children: [
+                          const Icon(Icons.sync, color: _accent, size: 20),
+                          const SizedBox(width: 8),
+                          Text(t.syncStatusTitle),
+                          const Spacer(),
+                          if (notifier.isRunning)
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: _accent,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      _buildStatRow(Icons.hourglass_empty,
+                          t.syncStatusPending, notifier.waiting, Colors.orange),
+
+                      const SizedBox(height: 8),
+
+                      _buildStatRow(Icons.check_circle,
+                          t.syncStatusDone, notifier.done, Colors.green),
+
+                      const SizedBox(height: 8),
+
+                      if (notifier.isRunning &&
+                          notifier.currentFileProgress > 0) ...[
+                        const SizedBox(height: 16),
+
+                        if (notifier.currentFileName != null)
+                          Text(
+                            notifier.currentFileName!,
+                            style: const TextStyle(fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                        const SizedBox(height: 6),
+
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: notifier.currentFileProgress,
+                            minHeight: 6,
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
 
-                  _buildStatRow(Icons.hourglass_empty,
-                      t.syncStatusPending, _lastProgress.pending, Colors.orange),
+                        const SizedBox(height: 4),
 
-                  const SizedBox(height: 8),
-
-                  _buildStatRow(Icons.cloud_upload,
-                      t.syncStatusUploading2, _lastProgress.uploading, _accent),
-
-                  const SizedBox(height: 8),
-
-                  _buildStatRow(Icons.check_circle,
-                      t.syncStatusDone, _lastProgress.done, Colors.green),
-
-                  const SizedBox(height: 8),
-
-                  // _buildStatRow(Icons.error_outline,
-                  //     t.syncStatusFailed, _lastProgress.failed, Colors.red),
-
-                  if (_isSyncing &&
-                      _lastProgress.currentFileProgress > 0) ...[
-                    const SizedBox(height: 16),
-
-                    if (_lastProgress.currentFileName != null)
-                      Text(
-                        _lastProgress.currentFileName!,
-                        style: const TextStyle(fontSize: 12),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
-                    const SizedBox(height: 6),
-
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: _lastProgress.currentFileProgress,
-                        minHeight: 6,
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '${(_lastProgress.currentFileProgress * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            '${(notifier.currentFileProgress * 100).toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ],
+                      ],
+                    ],
+                  );
+                },
               ),
             ),
 
@@ -296,11 +366,11 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
                   backgroundColor: _accent,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                onPressed: _isSyncing ? null : _startSync,
+                onPressed: isRunning ? null : _startSync,
               ),
             ),
 
-            if (_isSyncing) ...[
+            if (isRunning) ...[
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -357,22 +427,86 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
   }
 }
 
-// 👇 ЗАГЛУШКА picker (замени на свою галерею)
-class _DummyPickerPage extends StatelessWidget {
-  const _DummyPickerPage();
+class _GalleryPickerPage extends StatefulWidget {
+  final List<String> initialSelected;
+  const _GalleryPickerPage(this.initialSelected);
+
+  @override
+  State<_GalleryPickerPage> createState() => _GalleryPickerPageState();
+}
+
+class _GalleryPickerPageState extends State<_GalleryPickerPage> {
+  final Set<String> _selected = {};
+  List<AssetEntity> _assets = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected.addAll(widget.initialSelected);
+    _loadAssets();
+  }
+
+  Future<void> _loadAssets() async {
+    final permission = await PhotoManager.requestPermissionExtend();
+    if (!permission.isAuth) return;
+    
+    final albums = await PhotoManager.getAssetPathList(type: RequestType.common);
+    if (albums.isNotEmpty) {
+      final assets = await albums.first.getAssetListPaged(page: 0, size: 200);
+      if (mounted) {
+        setState(() {
+          _assets = assets;
+          _loading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Выбор файлов')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context, ['file1.jpg', 'file2.mp4']);
-          },
-          child: const Text('Выбрать тестовые файлы'),
-        ),
+      appBar: AppBar(
+        title: const Text('Select Files'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.check),
+            onPressed: () => Navigator.pop(context, _selected.toList()),
+          )
+        ],
       ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3, crossAxisSpacing: 2, mainAxisSpacing: 2),
+              itemCount: _assets.length,
+              itemBuilder: (context, index) {
+                final asset = _assets[index];
+                final isSelected = _selected.contains(asset.id);
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    isSelected ? _selected.remove(asset.id) : _selected.add(asset.id);
+                  }),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      FutureBuilder<Uint8List?>(
+                        future: asset.thumbnailDataWithSize(const ThumbnailSize(200, 200)),
+                        builder: (_, snap) => snap.data != null 
+                            ? Image.memory(snap.data!, fit: BoxFit.cover) 
+                            : const ColoredBox(color: Colors.grey),
+                      ),
+                      if (isSelected)
+                        Container(
+                          color: Colors.black45,
+                          child: const Icon(Icons.check_circle, color: Colors.blueAccent, size: 30),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
     );
   }
 }

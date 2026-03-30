@@ -13,11 +13,13 @@ class MediaScanner {
   final SyncQueueDb db;
   final Set<String> uploadedKeys;
   final Set<String>? selectedLocalIds;
+  final String? sessionId;
 
   MediaScanner({
     required this.db,
     required this.uploadedKeys,
     this.selectedLocalIds,
+    this.sessionId,
   });
 
   /// Scans device gallery, deduplicates, and enqueues new items.
@@ -84,6 +86,7 @@ class MediaScanner {
                   fileName: name,
                   fileSize: size,
                   mimeType: _mimeForAsset(asset),
+                  sessionId: sessionId,
                   status: SyncStatus.done,
                   createdAt: now,
                   updatedAt: now,
@@ -103,6 +106,7 @@ class MediaScanner {
                   fileSize: size,
                   mimeType: _mimeForAsset(asset),
                   sha256: hash,
+                  sessionId: sessionId,
                   status: SyncStatus.done,
                   createdAt: now,
                   updatedAt: now,
@@ -118,6 +122,7 @@ class MediaScanner {
                 fileSize: size,
                 mimeType: _mimeForAsset(asset),
                 sha256: hash,
+                sessionId: sessionId,
                 status: SyncStatus.pending,
                 createdAt: now,
                 updatedAt: now,

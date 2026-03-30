@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'core/config/app_config.dart';
 import 'core/services/language_notifier.dart';
 import 'features/auth/presentation/splash_page.dart';
@@ -131,7 +133,13 @@ void main() async {
   await ThemeNotifier.instance.init();
   await LanguageNotifier.instance.init();
   await AutoSyncService().initialize();
-  runApp(const CloudApp());
+  await AndroidAlarmManager.initialize();
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => SyncNotifier(AutoSyncService()),
+      child: const CloudApp(),
+    ),
+  );
 }
 
 class CloudApp extends StatelessWidget {

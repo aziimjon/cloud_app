@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/config/app_config.dart';
@@ -13,24 +12,38 @@ import 'domain/media_scanner.dart';
 import '../home/data/home_repository.dart';
 import '../home/data/models/folder_model.dart';
 
+@pragma('vm:entry-point')
+void backgroundSyncCallback() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  AppConfig.initialize(Environment.dev);
+  await SecureStorage.getAccessToken(); // Ensure storage is ready
+  final service = AutoSyncService();
+  await service.initialize();
+  await service.startAutoSync();
+  debugPrint('[AlarmManager] Background sync executed.');
+}
+
 class SyncProgress {
+  final int total;
   final int pending;
   final int uploading;
   final int done;
   final int failed;
   final double currentFileProgress;
   final String? currentFileName;
-  final int totalInBatch;
 
   const SyncProgress({
+    this.total = 0,
     this.pending = 0,
     this.uploading = 0,
     this.done = 0,
     this.failed = 0,
     this.currentFileProgress = 0.0,
     this.currentFileName,
-    this.totalInBatch = 0,
   });
+
+  /// Alias for pending — files still waiting to be processed
+  int get waiting => pending;
 }
 
 class AutoSyncService {
@@ -54,10 +67,14 @@ class AutoSyncService {
   bool _isRunning = false;
   bool get isRunning => _isRunning;
   int _syncSessionId = 0;
+  String? _currentSessionId;
 
   /// Call once at app startup, after WidgetsFlutterBinding.ensureInitialized().
   Future<void> initialize() async {
     await _db.init();
+
+    // Generate session ID for this initialization scan
+    _currentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
 
     final token = await SecureStorage.getAccessToken();
     if (token == null || token.isEmpty) {
@@ -102,6 +119,7 @@ class AutoSyncService {
       db: _db,
       uploadedKeys: uploadedKeys,
       selectedLocalIds: selectedIds,
+      sessionId: _currentSessionId,
     );
     final newItems = await scanner.scanAndEnqueue();
     debugPrint('[AutoSync] Scanned: $newItems new items enqueued');
@@ -126,9 +144,6 @@ class AutoSyncService {
     _isRunning = true;
     _syncSessionId++;
     final sessionId = _syncSessionId;
-    _batchDone = 0;
-    _batchFailed = 0;
-    _totalInBatch = 0;
     _currentFileName = null;
 
     try {
@@ -166,7 +181,7 @@ class AutoSyncService {
           break;
         }
 
-        _totalInBatch = tasks.length;
+
 
         // Step 3: Check duplicates in batch (fail-safe: on error, upload all)
         Map<String, bool> duplicateMap;
@@ -185,7 +200,6 @@ class AutoSyncService {
           final isDuplicate = duplicateMap[task.localId] ?? false;
           if (isDuplicate) {
             await _db.markDone(task.id!, 'duplicate_skipped');
-            _batchDone++;
             debugPrint('[Sync] Skipped duplicate: ${task.fileName}');
             await _emitProgress();
             continue;
@@ -195,7 +209,6 @@ class AutoSyncService {
           final file = File(task.filePath);
           if (!file.existsSync()) {
             await _db.markFailed(task.id!);
-            _batchFailed++;
             debugPrint('[Sync] File missing, skipped: ${task.filePath}');
             await _emitProgress();
             continue;
@@ -215,16 +228,13 @@ class AutoSyncService {
               },
             );
             await _db.markDone(task.id!, serverUuid);
-            _batchDone++;
             debugPrint('[Sync] Uploaded: ${task.fileName} → $serverUuid');
           } on TusUploadException catch (e) {
             await _db.markFailed(task.id!);
-            _batchFailed++;
             debugPrint('[Sync][ERROR] Upload failed: ${task.fileName} — $e');
           } catch (e) {
             // Catch any unexpected error to prevent batch abort
             await _db.markFailed(task.id!);
-            _batchFailed++;
             debugPrint('[Sync][ERROR] Unexpected: ${task.fileName} — $e');
           }
 
@@ -267,20 +277,22 @@ class AutoSyncService {
   }
 
   String? _currentFileName;
-  int _batchDone = 0;
-  int _batchFailed = 0;
-  int _totalInBatch = 0;
 
   Future<void> _emitProgress({double currentProgress = 0.0}) async {
-    final counts = await _db.getStatusCounts();
+    final sid = _currentSessionId;
+    final total = await _db.countByStatus(null, sessionId: sid);
+    final done = await _db.countByStatus('done', sessionId: sid);
+    final pending = await _db.countByStatus('pending', sessionId: sid);
+    final uploading = await _db.countByStatus('uploading', sessionId: sid);
+    final failed = await _db.countByStatus('failed', sessionId: sid);
     _progressController.add(SyncProgress(
-      pending: counts['pending'] ?? 0,
-      uploading: counts['uploading'] ?? 0,
-      done: (counts['done'] ?? 0) + _batchDone,
-      failed: (counts['failed'] ?? 0) + _batchFailed,
+      total: total,
+      pending: pending,
+      uploading: uploading,
+      done: done,
+      failed: failed,
       currentFileProgress: currentProgress,
       currentFileName: _currentFileName,
-      totalInBatch: _totalInBatch,
     ));
   }
 
@@ -288,7 +300,48 @@ class AutoSyncService {
     _progressController.add(SyncProgress(
       currentFileProgress: currentProgress,
       currentFileName: _currentFileName,
-      totalInBatch: _totalInBatch,
     ));
   }
 }
+
+/// Pure UI state holder for sync progress.
+/// Listens to AutoSyncService stream, debounces rapid updates,
+/// and calls notifyListeners(). Contains ZERO business logic.
+class SyncNotifier extends ChangeNotifier {
+  final AutoSyncService _service;
+  StreamSubscription<SyncProgress>? _sub;
+  Timer? _debounce;
+
+  int total = 0;
+  int waiting = 0;
+  int done = 0;
+  int failed = 0;
+  double currentFileProgress = 0.0;
+  String? currentFileName;
+  bool get isRunning => _service.isRunning;
+
+  SyncNotifier(this._service) {
+    _sub = _service.progressStream.listen(_onProgress);
+  }
+
+  void _onProgress(SyncProgress p) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 100), () {
+      total = p.total;
+      waiting = p.pending;
+      done = p.done;
+      failed = p.failed;
+      currentFileProgress = p.currentFileProgress;
+      currentFileName = p.currentFileName;
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _sub?.cancel();
+    super.dispose();
+  }
+}
+

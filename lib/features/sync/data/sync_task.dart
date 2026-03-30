@@ -8,6 +8,7 @@ class SyncTask {
   final int fileSize;
   final String mimeType;
   final String? sha256;
+  final String? sessionId;
   final SyncStatus status;
   final int retryCount;
   final String? serverUuid;
@@ -22,6 +23,7 @@ class SyncTask {
     required this.fileSize,
     required this.mimeType,
     this.sha256,
+    this.sessionId,
     this.status = SyncStatus.pending,
     this.retryCount = 0,
     this.serverUuid,
@@ -37,6 +39,7 @@ class SyncTask {
     int? fileSize,
     String? mimeType,
     String? sha256,
+    String? sessionId,
     SyncStatus? status,
     int? retryCount,
     String? serverUuid,
@@ -51,6 +54,7 @@ class SyncTask {
       fileSize: fileSize ?? this.fileSize,
       mimeType: mimeType ?? this.mimeType,
       sha256: sha256 ?? this.sha256,
+      sessionId: sessionId ?? this.sessionId,
       status: status ?? this.status,
       retryCount: retryCount ?? this.retryCount,
       serverUuid: serverUuid ?? this.serverUuid,
@@ -68,6 +72,7 @@ class SyncTask {
       'file_size': fileSize,
       'mime_type': mimeType,
       'sha256': sha256,
+      'session_id': sessionId,
       'status': status.name,
       'retry_count': retryCount,
       'server_uuid': serverUuid,
@@ -85,6 +90,7 @@ class SyncTask {
       fileSize: map['file_size'] as int,
       mimeType: map['mime_type'] as String,
       sha256: map['sha256'] as String?,
+      sessionId: map['session_id'] as String?,
       status: SyncStatus.values.firstWhere(
         (e) => e.name == (map['status'] as String),
         orElse: () => SyncStatus.pending,

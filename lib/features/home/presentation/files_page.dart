@@ -325,7 +325,9 @@ class FilesPageState extends State<FilesPage> {
       } catch (_) {}
       if (!mounted) return;
       setState(() {
-        _folders = result['folders'] as List<FolderModel>;
+        final List<FolderModel> loadedFolders = result['folders'] as List<FolderModel>;
+        loadedFolders.sort((a, b) => a.isSync ? -1 : (b.isSync ? 1 : 0));
+        _folders = loadedFolders;
         _files = result['files'] as List<FileModel>;
         _hasNextPage = result['hasNext'] as bool;
         _pinnedFolders = pinned;
