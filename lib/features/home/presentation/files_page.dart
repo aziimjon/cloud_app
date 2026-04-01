@@ -324,8 +324,20 @@ class FilesPageState extends State<FilesPage> {
         pinned = await _repo.getPinnedFolders();
       } catch (_) {}
       if (!mounted) return;
+      // Mark sync folder by name if server returns is_sync=false
+      final rawFolders = result['folders'] as List<FolderModel>;
+      final markedFolders = rawFolders.map((f) {
+        if (!f.isSync && (f.name == '📱 Sync' || f.name == 'Sync')) {
+          return f.copyWith(isSync: true);
+        }
+        return f;
+      }).toList();
+      // Sort: sync folder always first
+      markedFolders.sort((a, b) => a.isSync ? -1 : (b.isSync ? 1 : 0));
+
+      if (!mounted) return;
       setState(() {
-        _folders = result['folders'] as List<FolderModel>;
+        _folders = markedFolders;
         _files = result['files'] as List<FileModel>;
         _hasNextPage = result['hasNext'] as bool;
         _pinnedFolders = pinned;
@@ -429,7 +441,7 @@ class FilesPageState extends State<FilesPage> {
 
   void _openFolder(FolderModel folder) {
     setState(() {
-      _breadcrumb.add((id: folder.id, isSync: false, name: folder.name));
+      _breadcrumb.add((id: folder.id, isSync: folder.isSync, name: folder.name));
       _showFavourites = false;
       _activeFilter = _FilterType.all;
       _folderPage = 0;

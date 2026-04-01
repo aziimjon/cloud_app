@@ -727,14 +727,22 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               const Icon(Icons.cloud, color: _accent),
               const SizedBox(width: 8),
-              Text(t.storage,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              Text(
-                '${_formatBytes(usedStorage)} ${t.used} / ${_formatBytes(storageLimit)} ${t.total}',
-                style:
-                TextStyle(fontSize: 13, color: Colors.grey[500]),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t.storage,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_formatBytes(usedStorage)} ${t.used} / ${_formatBytes(storageLimit)} ${t.total}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

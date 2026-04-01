@@ -137,7 +137,7 @@ class HomeRepository {
     final folders = result['folders'] as List<FolderModel>;
     for (int i = 0; i < folders.length; i++) {
       final folder = folders[i];
-      if (folder.isSync || folder.name == 'Sync') {
+      if (folder.isSync || folder.name == 'Sync' || folder.name == '📱 Sync') {
         debugPrint('[HomeRepo] Sync folder found: ${folder.id}');
         if (!folder.isSync) {
           // Обновляем "локальную БД" (кэш), устанавливая isSync = true
@@ -220,18 +220,16 @@ class HomeRepository {
     required List<String> files,
     required List<String> folders,
   }) async {
-    // Guard: filter out sync folder from bulk deletion
+    // Guard: filter out sync folder from bulk deletion (3 layers)
     if (folders.isNotEmpty) {
       final syncIds = _cachedRootFolders
-          .where((f) => f.isSync)
+          .where((f) => f.isSync || f.name == '📱 Sync' || f.name == 'Sync')
           .map((f) => f.id)
           .toSet();
-      if (syncIds.isNotEmpty) {
-        final before = folders.length;
-        folders = folders.where((id) => !syncIds.contains(id)).toList();
-        if (folders.length < before) {
-          debugPrint('[HomeRepository] Blocked sync folder from bulk delete');
-        }
+      final before = folders.length;
+      folders = folders.where((id) => !syncIds.contains(id)).toList();
+      if (folders.length < before) {
+        debugPrint('[HomeRepository] Blocked sync folder from bulk delete');
       }
     }
     try {

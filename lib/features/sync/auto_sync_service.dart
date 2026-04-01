@@ -270,9 +270,11 @@ class AutoSyncService {
   int _batchDone = 0;
   int _batchFailed = 0;
   int _totalInBatch = 0;
+  Map<String, int> _lastCounts = {'pending': 0, 'uploading': 0, 'done': 0, 'failed': 0};
 
   Future<void> _emitProgress({double currentProgress = 0.0}) async {
     final counts = await _db.getStatusCounts();
+    _lastCounts = counts; // сохраняем для _emitProgressSync
     _progressController.add(SyncProgress(
       pending: counts['pending'] ?? 0,
       uploading: counts['uploading'] ?? 0,
@@ -285,7 +287,12 @@ class AutoSyncService {
   }
 
   void _emitProgressSync({double currentProgress = 0.0}) {
+    // используем _lastCounts чтобы pending/done не обнулялись во время загрузки
     _progressController.add(SyncProgress(
+      pending: _lastCounts['pending'] ?? 0,
+      uploading: _lastCounts['uploading'] ?? 0,
+      done: (_lastCounts['done'] ?? 0) + _batchDone,
+      failed: (_lastCounts['failed'] ?? 0) + _batchFailed,
       currentFileProgress: currentProgress,
       currentFileName: _currentFileName,
       totalInBatch: _totalInBatch,

@@ -234,11 +234,7 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
 
                   const SizedBox(height: 8),
 
-                  _buildStatRow(Icons.cloud_upload,
-                      t.syncStatusUploading2, _lastProgress.uploading, _accent),
-
-                  const SizedBox(height: 8),
-
+                  // Загрузка — скрыта
                   _buildStatRow(Icons.check_circle,
                       t.syncStatusDone, _lastProgress.done, Colors.green),
 
@@ -247,40 +243,41 @@ class _AutoSyncSettingsPageState extends State<AutoSyncSettingsPage> {
                   // _buildStatRow(Icons.error_outline,
                   //     t.syncStatusFailed, _lastProgress.failed, Colors.red),
 
-                  if (_isSyncing &&
-                      _lastProgress.currentFileProgress > 0) ...[
-                    const SizedBox(height: 16),
-
-                    if (_lastProgress.currentFileName != null)
-                      Text(
-                        _lastProgress.currentFileName!,
-                        style: const TextStyle(fontSize: 12),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-
+                  const SizedBox(height: 16),
+                  // Текущий файл — показываем всегда, не мигает
+                  if (_lastProgress.currentFileName != null)
+                    Text(
+                      _lastProgress.currentFileName!,
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (_lastProgress.currentFileName != null)
                     const SizedBox(height: 6),
-
+                  if (_lastProgress.currentFileName != null)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: LinearProgressIndicator(
-                        value: _lastProgress.currentFileProgress,
+                        value: _lastProgress.currentFileProgress > 0
+                            ? _lastProgress.currentFileProgress
+                            : null,
                         minHeight: 6,
                       ),
                     ),
-
+                  if (_lastProgress.currentFileName != null)
                     const SizedBox(height: 4),
-
+                  if (_lastProgress.currentFileName != null)
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        '${(_lastProgress.currentFileProgress * 100).toStringAsFixed(0)}%',
+                        _lastProgress.currentFileProgress > 0
+                            ? '${(_lastProgress.currentFileProgress * 100).toStringAsFixed(0)}%'
+                            : '',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[500],
                         ),
                       ),
                     ),
-                  ],
                 ],
               ),
             ),
